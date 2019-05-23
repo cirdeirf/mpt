@@ -2,5 +2,10 @@
 name = "mpt"
 version = "0.1.0"
 authors = ["Pius Meinert <yrr+work@pm.me>"]
+edition = "2018"
 
 [dependencies]
+nalgebra = "0.18"
+log_domain = "0.4.0"
+priority-queue = "0.6.0"
+num-traits = "0.2.8"
