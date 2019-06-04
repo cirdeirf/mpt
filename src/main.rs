@@ -1,8 +1,11 @@
+mod pfa;
+mod pta;
+
 use log_domain::LogDomain;
 use nalgebra::{DMatrix, DVector, RowDVector};
-use num_traits::Zero;
-use std::cmp;
-use std::collections::{BinaryHeap, HashMap};
+use pfa::PFA;
+use pta::Tree;
+use pta::PTA;
 
 macro_rules! hashmap {
     ($( $key: expr => $val: expr ),*) => {{
@@ -12,107 +15,50 @@ macro_rules! hashmap {
     }}
 }
 
-pub struct PFA {
-    pub sigma: Vec<char>,
-    pub number_states: usize,
-    pub initial_states: RowDVector<f64>,
-    pub final_states: DVector<f64>,
-    pub transitions: HashMap<char, DMatrix<f64>>,
-    pub m_sigma_star: DMatrix<f64>,
-}
-
-impl PFA {
-    pub fn new(
-        initial_states: RowDVector<f64>,
-        final_states: DVector<f64>,
-        transitions: HashMap<char, DMatrix<f64>>,
-    ) -> PFA {
-        let number_states = initial_states.len();
-        let m_sigma_star = (DMatrix::identity(number_states, number_states)
-            - transitions.values().sum::<DMatrix<f64>>())
-        .try_inverse()
-        .unwrap();
-        PFA {
-            sigma: transitions.keys().map(|sigma| sigma.clone()).collect(),
-            number_states: initial_states.len(),
-            initial_states: initial_states,
-            final_states: final_states,
-            transitions: transitions,
-            m_sigma_star: m_sigma_star,
-        }
-    }
-
-    pub fn prefix_probability(&self, w: &Vec<char>) -> LogDomain<f64> {
-        // TODO save prefix as part of queue item
-        let mut prefix = &self.initial_states
-            * DMatrix::identity(self.number_states, self.number_states);
-        for c in w {
-            prefix = prefix * self.transitions.get(&c).unwrap();
-        }
-        let result = prefix * &self.m_sigma_star * &self.final_states;
-
-        LogDomain::new(*result.get(0).unwrap()).unwrap()
-    }
-
-    pub fn potential_probability(&self, w: &Vec<char>) -> LogDomain<f64> {
-        cmp::min(
-            self.prefix_probability(w),
-            LogDomain::new(self.number_states.pow(2) as f64).unwrap(),
-        )
-    }
-
-    pub fn most_probable_string(&self) -> Vec<char> {
-        let mut current_prop = LogDomain::zero();
-        let mut current_best = vec![];
-
-        let mut q = BinaryHeap::new();
-        q.push((current_prop, vec![]));
-
-        while !q.is_empty() {
-            print!("\n[");
-            for (pp, w) in &q {
-                print!("({}, {}), ", w.iter().collect::<String>(), pp);
-            }
-            println!("]");
-            let (pp, w) = q.pop().unwrap();
-            println!("PP({}) \t {}", w.iter().collect::<String>(), pp);
-
-            if pp >= current_prop {
-                current_prop = pp;
-                current_best = w.clone();
-
-                for a in &self.sigma {
-                    let mut wa = w.clone();
-                    wa.push(*a);
-                    let pp_wa = self.prefix_probability(&wa);
-                    println!(
-                        "PP({}) \t {}",
-                        wa.iter().collect::<String>(),
-                        pp_wa
-                    );
-                    if pp_wa > current_prop {
-                        q.push((pp_wa, wa));
-                    }
-                }
-            } else {
-                return current_best;
-            }
-        }
-        return current_best;
-    }
-}
-
 fn main() {
     let pfa = PFA::new(
         RowDVector::from_vec(vec![1., 0., 0.]),
-        DVector::from_vec(vec![0., 0.4, 0.6]),
+        DVector::from_vec(vec![0., 0.0, 1.0]),
         hashmap![
             'a' =>
             DMatrix::from_vec(3, 3, vec![0., 0., 0., 0.3, 0., 0., 0., 0.2, 0.]),
             'b' =>
             DMatrix::from_vec(3, 3, vec![0., 0., 0., 0.7, 0., 0., 0., 0.8, 0.])],
     );
-    println!("m_a: {}", pfa.transitions.get(&'a').unwrap());
-    println!("m_b: {}", pfa.transitions.get(&'b').unwrap());
-    println!("alg: {:?}", pfa.most_probable_string());
+    // println!("m_a: {}", pfa.transitions.get(&'a').unwrap());
+    // println!("m_b: {}", pfa.transitions.get(&'b').unwrap());
+    // println!("alg: {:?}", pfa.most_probable_string());
+
+    let pta = PTA::new(
+        hashmap!['a' => 0, 'b' => 0, 's' => 2],
+        vec![
+            LogDomain::new(1.0).unwrap(),
+            LogDomain::new(0.0).unwrap(),
+            LogDomain::new(0.0).unwrap(),
+        ],
+        hashmap![
+        'a' => hashmap![1 => vec![(1, 'a', vec![], LogDomain::new(0.5).unwrap())],
+                        2 => vec![(1, 'a', vec![], LogDomain::new(0.4).unwrap())]],
+        'b' => hashmap![1 => vec![(1, 'b', vec![], LogDomain::new(0.2).unwrap())],
+                        2 => vec![(1, 'b', vec![], LogDomain::new(0.6).unwrap())]],
+        's' => hashmap![0 => vec![(0, 's', vec![1, 1], LogDomain::new(0.9).unwrap()),
+                                  (0, 's', vec![2, 2], LogDomain::new(0.1).unwrap())],
+                        1 => vec![(1, 's', vec![1, 2], LogDomain::new(0.3).unwrap())]]],
+    );
+    let xi = Tree {
+        root: 's',
+        children: vec![
+            Tree {
+                root: 'a',
+                children: vec![],
+            },
+            Tree {
+                root: 's',
+                children: vec![],
+            },
+        ],
+    };
+    pta.prefix_probability(&xi);
+    println!("");
+    pta.probability(&xi);
 }
