@@ -58,7 +58,6 @@ fn main() {
             },
         ],
     };
-    pta.prefix_probability(&xi);
-    println!("");
-    pta.probability(&xi);
+    println!("pp: \t{}", pta.prefix_probability(&xi));
+    println!("p: \t{}", pta.probability(&xi));
 }
