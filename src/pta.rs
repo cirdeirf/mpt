@@ -1,8 +1,10 @@
 use log_domain::LogDomain;
 use num_traits::Zero;
 use priority_queue::PriorityQueue;
+use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
+use std::time::{Duration, Instant};
 
 macro_rules! hashmap {
     ($( $key: expr => $val: expr ),*) => {{
@@ -24,6 +26,18 @@ pub struct Tree {
 }
 
 impl Tree {
+    pub fn get_height(&self) -> usize {
+        if self.children.is_empty() {
+            1
+        } else {
+            self.children
+                .iter()
+                .map(|t| t.get_height() + 1)
+                .max()
+                .unwrap()
+        }
+    }
+
     pub fn extend(&mut self, s: char, sigma: &HashMap<char, usize>) {
         let mut t_stack = Vec::new();
         t_stack.push(self);
@@ -43,7 +57,7 @@ impl Tree {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    fn to_string(&self) -> String {
         let mut ret = self.root.to_string();
         if !self.children.is_empty() {
             ret.push_str("( ");
@@ -86,27 +100,67 @@ impl PTA {
         }
     }
 
-    pub fn probability(&self, xi: &Tree) -> LogDomain<f64> {
-        self.rec_probability_root(xi, false)
+    pub fn probability(
+        &self,
+        xi: &Tree,
+        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+    ) -> LogDomain<f64> {
+        self.rec_probability_root(xi, false, &mut a, &mut b)
     }
 
-    pub fn prefix_probability(&self, xi: &Tree) -> LogDomain<f64> {
-        self.rec_probability_root(xi, true)
+    pub fn prefix_probability(
+        &self,
+        xi: &Tree,
+        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+    ) -> LogDomain<f64> {
+        self.rec_probability_root(xi, true, &mut a, &mut b)
     }
 
-    fn potential_probability(&self, xi: &Tree) -> LogDomain<f64> {
-        self.prefix_probability(xi)
+    fn potential_probability(
+        &self,
+        xi: &Tree,
+        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+    ) -> LogDomain<f64> {
+        cmp::min(
+            self.prefix_probability(xi, &mut a, &mut b),
+            LogDomain::new(
+                self.number_states.pow(2) as f64 / xi.get_height() as f64,
+            )
+            .unwrap(),
+        )
     }
 
-    fn rec_probability_root(&self, xi: &Tree, prefix: bool) -> LogDomain<f64> {
-        self.rec_probability(xi, prefix)
+    fn rec_probability_root(
+        &self,
+        xi: &Tree,
+        prefix: bool,
+        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+    ) -> LogDomain<f64> {
+        self.rec_probability(xi, prefix, &mut a, &mut b)
             .iter()
             .zip(&self.root_weights)
             .map(|(&p_q, &root_q)| p_q * root_q)
             .sum()
     }
 
-    fn rec_probability(&self, xi: &Tree, prefix: bool) -> Vec<LogDomain<f64>> {
+    fn rec_probability(
+        &self,
+        xi: &Tree,
+        prefix: bool,
+        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+    ) -> Vec<LogDomain<f64>> {
+        if a.contains_key(&xi) && prefix {
+            return a.get(xi).unwrap().clone();
+        }
+        if b.contains_key(&xi) && !prefix {
+            return b.get(xi).unwrap().clone();
+        }
+        // println!("{}", xi);
         let transitions = self.transitions.get(&xi.root).unwrap();
 
         let mut ret: Vec<LogDomain<f64>> = Vec::new();
@@ -118,7 +172,9 @@ impl PTA {
                     for (i, q_i) in t.2.iter().enumerate() {
                         match xi.children.get(i) {
                             Some(t_i) => {
-                                p_t *= self.rec_probability(t_i, prefix)[*q_i]
+                                p_t *= self.rec_probability(
+                                    t_i, prefix, &mut a, &mut b,
+                                )[*q_i]
                             }
                             None if prefix => continue,
                             None => {
@@ -136,12 +192,21 @@ impl PTA {
         //     print!("{}\t", q_p);
         // }
         // println!("");
+        if !a.contains_key(&xi) && prefix {
+            &mut a.insert(xi.clone(), ret.clone());
+        }
+        if !b.contains_key(&xi) && !prefix {
+            &mut b.insert(xi.clone(), ret.clone());
+        }
         ret
     }
 
     pub fn most_probable_tree(&self) -> (Tree, LogDomain<f64>) {
+        let start = Instant::now();
         let mut current_prop = LogDomain::zero();
         let mut current_best;
+        let mut a: HashMap<Tree, Vec<LogDomain<f64>>> = HashMap::new();
+        let mut b: HashMap<Tree, Vec<LogDomain<f64>>> = HashMap::new();
 
         let mut q = PriorityQueue::new();
         for (s, _) in &self.sigma {
@@ -149,41 +214,45 @@ impl PTA {
                 root: s.clone(),
                 children: Vec::new(),
             };
-            let pp = self.potential_probability(&t);
+            let pp = self.potential_probability(&t, &mut a, &mut b);
             q.push(t, pp);
         }
 
         current_best = q.peek().unwrap().0.clone();
 
         while !q.is_empty() {
-            println!("[");
-            for (t, pp) in &q {
-                println!("\t({} \t {})", pp, t);
-            }
-            println!("]");
+            // println!("[");
+            // for (t, pp) in &q {
+            //     println!("\t({} \t {})", pp, t);
+            // }
+            // println!("]");
 
             let (t, pp) = q.pop().unwrap();
-            println!("PP({}) \t {}", t, pp);
+            // println!("PP({}) \t {}", t, pp);
+            // return (current_best, current_prop);
 
             if pp > current_prop {
-                let p = self.probability(&t);
-                println!("P({}) \t {}", t, p);
+                let p = self.probability(&t, &mut a, &mut b);
+                // println!("P({}) \t {}", t, p);
                 if p > current_prop {
                     current_prop = p;
                     current_best = t.clone();
                 }
 
-                println!("\nt: {}", t);
+                // println!("\nt: {}", t);
                 for (s, _) in &self.sigma {
                     let mut t_s = t.clone();
                     t_s.extend(*s, &self.sigma);
                     // println!("t_s: {}", t_s);
-                    let pp_t_s = self.potential_probability(&t_s);
+                    let pp_t_s =
+                        self.potential_probability(&t_s, &mut a, &mut b);
+                    // println!("t_s: {}\t{}", t_s, pp_t_s);
                     if pp_t_s > current_prop {
                         q.push(t_s, pp_t_s);
                     }
                 }
             } else {
+                println!("time: {:?}", start.elapsed());
                 return (current_best, current_prop);
             }
         }
