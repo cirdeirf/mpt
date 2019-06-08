@@ -1,48 +1,23 @@
-#[macro_use]
 mod pta;
 
-use log_domain::LogDomain;
 use pta::PTA;
+use std::time::Instant;
 
 fn main() {
-    // prime automaton for Psi = {2, 3}
-    let pta = PTA::new(
-        hashmap!['a' => 0, 'g' => 1],
-        vec![
-            LogDomain::new(1.0).unwrap(),
-            LogDomain::new(0.0).unwrap(),
-            LogDomain::new(0.0).unwrap(),
-            LogDomain::new(0.0).unwrap(),
-            LogDomain::new(0.0).unwrap(),
-            LogDomain::new(0.0).unwrap(),
-        ],
-        hashmap![
-        'a' => hashmap![2 => vec![(2, 'a', vec![], LogDomain::new(0.109).unwrap())],
-                        5 => vec![(5, 'a', vec![], LogDomain::new(0.109).unwrap())]],
-        'g' => hashmap![0 => vec![(0, 'g', vec![1], LogDomain::new(1.0/2.0).unwrap()),
-                                  (0, 'g', vec![3], LogDomain::new(1.0/2.0).unwrap())],
-                        1 => vec![(1, 'g', vec![2], LogDomain::new(1.0).unwrap())],
-                        2 => vec![(2, 'g', vec![1], LogDomain::new(1.0-0.109).unwrap())],
-                        3 => vec![(3, 'g', vec![4], LogDomain::new(1.0).unwrap())],
-                        4 => vec![(4, 'g', vec![5], LogDomain::new(1.0).unwrap())],
-                        5 => vec![(5, 'g', vec![3], LogDomain::new(1.0-0.109).unwrap())]]],
-    );
-    // let pta = PTA::new(
-    //     hashmap!['a' => 0, 'b' => 0, 's' => 2],
-    //     vec![
-    //         LogDomain::new(0.7).unwrap(),
-    //         LogDomain::new(0.2).unwrap(),
-    //         LogDomain::new(0.1).unwrap(),
-    //     ],
-    //     hashmap![
-    //     'a' => hashmap![1 => vec![(1, 'a', vec![], LogDomain::new(0.5).unwrap())],
-    //                     2 => vec![(2, 'a', vec![], LogDomain::new(0.4).unwrap())]],
-    //     'b' => hashmap![1 => vec![(1, 'b', vec![], LogDomain::new(0.2).unwrap())],
-    //                     2 => vec![(2, 'b', vec![], LogDomain::new(0.6).unwrap())]],
-    //     's' => hashmap![0 => vec![(0, 's', vec![1, 1], LogDomain::new(0.9).unwrap()),
-    //                               (0, 's', vec![2, 2], LogDomain::new(0.1).unwrap())],
-    //                     1 => vec![(1, 's', vec![1, 2], LogDomain::new(0.3).unwrap())]]],
-    // );
+    // // prime automaton for Psi = {2, 3}
+    let pta_string = "root: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]\n\
+                      transition: 2 -> a() # 0.109\n\
+                      transition: 5 -> a() # 0.109\n\
+                      transition: 0 -> g(1) # 0.5\n\
+                      transition: 0 -> g(3) # 0.5\n\
+                      transition: 1 -> g(2) # 1.0\n\
+                      transition: 2 -> g(1) # 0.891\n\
+                      transition: 3 -> g(4) # 1.0\n\
+                      transition: 4 -> g(5) # 1.0\n\
+                      transition: 5 -> g(3) # 0.891";
+    let pta: PTA = pta_string.parse().unwrap();
+    let start_time = Instant::now();
     let mpt = pta.most_probable_tree();
     println!("{}\t{}", mpt.1, mpt.0);
+    println!("time: {:?}", start_time.elapsed());
 }

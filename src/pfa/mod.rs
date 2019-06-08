@@ -60,7 +60,10 @@ impl PFA {
     pub fn potential_probability(&self, w: &Vec<char>) -> LogDomain<f64> {
         cmp::min(
             self.prefix_probability(w),
-            LogDomain::new(self.number_states.pow(2) as f64).unwrap(),
+            LogDomain::new(
+                (self.number_states + 1).pow(2) as f64 / w.len() as f64,
+            )
+            .unwrap(),
         )
     }
 
