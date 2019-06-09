@@ -6,32 +6,36 @@ use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
 use std::collections::HashMap;
+use std::hash::Hash;
 use tree::Tree;
 
-pub struct PTA {
-    pub sigma: HashMap<char, usize>,
+pub struct PTA<T> {
+    pub sigma: HashMap<T, usize>,
     pub number_states: usize,
     pub root_weights: Vec<LogDomain<f64>>,
-    pub transitions: HashMap<char, Vec<Transition>>,
+    pub transitions: HashMap<T, Vec<Transition<T>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Transition {
+pub struct Transition<T> {
     source_state: usize,
-    symbol: char,
+    symbol: T,
     target_states: Vec<usize>,
     probability: LogDomain<f64>,
 }
 
-impl PTA {
+impl<T> PTA<T>
+where
+    T: Eq + Hash + Clone,
+{
     pub fn new(
         root_weights: Vec<LogDomain<f64>>,
-        transitions: HashMap<char, Vec<Transition>>,
-    ) -> PTA {
+        transitions: HashMap<T, Vec<Transition<T>>>,
+    ) -> PTA<T> {
         let mut sigma = HashMap::new();
         for k in transitions.keys() {
             sigma.insert(
-                *k,
+                k.clone(),
                 transitions.get(&k).unwrap()[0].target_states.len(),
             );
         }
@@ -45,43 +49,40 @@ impl PTA {
 
     pub fn probability(
         &self,
-        xi: &Tree,
-        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
-        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        xi: &Tree<T>,
+        mut a: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
     ) -> LogDomain<f64> {
         self.rec_probability_root(xi, false, &mut a, &mut b)
     }
 
     pub fn prefix_probability(
         &self,
-        xi: &Tree,
-        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
-        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        xi: &Tree<T>,
+        mut a: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
     ) -> LogDomain<f64> {
         self.rec_probability_root(xi, true, &mut a, &mut b)
     }
 
     fn potential_probability(
         &self,
-        xi: &Tree,
-        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
-        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        xi: &Tree<T>,
+        mut a: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
     ) -> LogDomain<f64> {
         cmp::min(
             self.prefix_probability(xi, &mut a, &mut b),
-            LogDomain::new(
-                self.number_states.pow(2) as f64 / xi.get_height() as f64,
-            )
-            .unwrap(),
+            LogDomain::new(self.number_states.pow(2) as f64 / xi.get_height() as f64).unwrap(),
         )
     }
 
     fn rec_probability_root(
         &self,
-        xi: &Tree,
+        xi: &Tree<T>,
         prefix: bool,
-        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
-        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut a: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
     ) -> LogDomain<f64> {
         self.rec_probability(xi, prefix, &mut a, &mut b)
             .iter()
@@ -92,10 +93,10 @@ impl PTA {
 
     fn rec_probability(
         &self,
-        xi: &Tree,
+        xi: &Tree<T>,
         prefix: bool,
-        mut a: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
-        mut b: &mut HashMap<Tree, Vec<LogDomain<f64>>>,
+        mut a: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
+        mut b: &mut HashMap<Tree<T>, Vec<LogDomain<f64>>>,
     ) -> Vec<LogDomain<f64>> {
         if a.contains_key(&xi) && prefix {
             return a.get(xi).unwrap().clone();
@@ -112,16 +113,12 @@ impl PTA {
             for t in transitions
                 .iter()
                 .filter(|&t| t.source_state == q)
-                .collect::<Vec<&Transition>>()
+                .collect::<Vec<&Transition<T>>>()
             {
                 let mut p_t = t.probability;
                 for (i, q_i) in t.target_states.iter().enumerate() {
                     match xi.children.get(i) {
-                        Some(t_i) => {
-                            p_t *= self
-                                .rec_probability(t_i, prefix, &mut a, &mut b)
-                                [*q_i]
-                        }
+                        Some(t_i) => p_t *= self.rec_probability(t_i, prefix, &mut a, &mut b)[*q_i],
                         None if prefix => continue,
                         None => {
                             p_t = LogDomain::zero();
@@ -142,11 +139,11 @@ impl PTA {
         ret
     }
 
-    pub fn most_probable_tree(&self) -> (Tree, LogDomain<f64>) {
+    pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>) {
         let mut current_prop = LogDomain::zero();
         let mut current_best;
-        let mut a: HashMap<Tree, Vec<LogDomain<f64>>> = HashMap::new();
-        let mut b: HashMap<Tree, Vec<LogDomain<f64>>> = HashMap::new();
+        let mut a: HashMap<Tree<T>, Vec<LogDomain<f64>>> = HashMap::new();
+        let mut b: HashMap<Tree<T>, Vec<LogDomain<f64>>> = HashMap::new();
 
         let mut q = PriorityQueue::new();
         for (s, _) in &self.sigma {
@@ -182,10 +179,9 @@ impl PTA {
                 // println!("\nt: {}", t);
                 for (s, _) in &self.sigma {
                     let mut t_s = t.clone();
-                    t_s.extend(*s, &self.sigma);
+                    t_s.extend(s.clone(), &self.sigma);
                     // println!("t_s: {}", t_s);
-                    let pp_t_s =
-                        self.potential_probability(&t_s, &mut a, &mut b);
+                    let pp_t_s = self.potential_probability(&t_s, &mut a, &mut b);
                     // println!("t_s: {}\t{}", t_s, pp_t_s);
                     if pp_t_s > current_prop {
                         q.push(t_s, pp_t_s);
@@ -250,11 +246,7 @@ mod tests {
         let pta: PTA = pta_string.parse().unwrap();
         let xi = "(s (a) (s))".parse().unwrap();
         assert_eq!(
-            pta.potential_probability(
-                &xi,
-                &mut HashMap::new(),
-                &mut HashMap::new()
-            ),
+            pta.potential_probability(&xi, &mut HashMap::new(), &mut HashMap::new()),
             LogDomain::new(0.0945).unwrap()
         );
     }

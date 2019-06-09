@@ -1,19 +1,26 @@
 use crate::pta::{Transition, PTA};
 use log_domain::LogDomain;
 use nom::{
-    alt, call, delimited, do_parse, escaped, expr_res, is_not, is_space, many0,
-    map_res, named, one_of, opt, tag, take_while, IResult,
+    alt, alt_complete, call, complete, delimited, do_parse, escaped, expr_res,
+    is_not, is_space, many0, map_res, named, one_of, opt, rest, tag,
+    take_while, IResult,
 };
+use num_traits::One;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::str::{from_utf8, FromStr};
 
-impl FromStr for PTA {
+impl<T> FromStr for PTA<T>
+where
+    T: Eq + Hash + Clone + FromStr,
+    T::Err: Debug,
+{
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut root_pr = Vec::new();
-        let mut transitions: HashMap<char, Vec<Transition>> = HashMap::new();
+        let mut transitions: HashMap<T, Vec<Transition<T>>> = HashMap::new();
 
         let mut it = s.lines();
 
@@ -31,12 +38,12 @@ impl FromStr for PTA {
                     }
                 }
             } else if !l.is_empty() && !l.trim_start().starts_with("%") {
-                let t: Transition = l.trim().parse()?;
+                let t: Transition<T> = l.trim().parse()?;
                 // TODO maybe 2 calls on transitions is enough
                 if transitions.contains_key(&t.symbol) {
                     transitions.get_mut(&t.symbol).unwrap().push(t);
                 } else {
-                    transitions.insert(t.symbol, vec![t]);
+                    transitions.insert(t.symbol.clone(), vec![t]);
                 }
             }
         }
@@ -49,39 +56,59 @@ impl FromStr for PTA {
     }
 }
 
-impl FromStr for Transition {
+impl<T> FromStr for Transition<T>
+where
+    T: FromStr,
+    T::Err: Debug,
+{
     type Err = String;
 
-    fn from_str(st: &str) -> Result<Self, Self::Err> {
-        let e: String = "Malformed state.".to_string();
-        let s = st.replace(",", "");
-        let s = s.replace("#", "");
-        let v: Vec<&str> = s.split(|c| c == '(' || c == ')').collect();
-        let source_and_symbol: Vec<&str> = v[0].split_whitespace().collect();
-        let t: Vec<&str> = v[1].split_whitespace().collect();
-        let mut targets: Vec<usize> = Vec::new();
-        for q in t {
-            targets.push(q.parse().map_err(|_| e.clone())?);
-        }
-        let pr: LogDomain<f64> = v[2].trim().parse().map_err(|_| e.clone())?;
-        if v.len() == 3 && source_and_symbol.len() == 4 {
-            match source_and_symbol[2] {
-                "->" | "→" => Ok(Transition {
-                    source_state: source_and_symbol[1]
-                        .parse()
-                        .map_err(|_| e.clone())?,
-                    symbol: source_and_symbol[3]
-                        .parse()
-                        .map_err(|_| e.clone())?,
-                    target_states: targets,
-                    probability: pr,
-                }),
-                _ => Err(format!("Transition malformed: {}", st)),
-            }
-        } else {
-            Err(format!("Transition malformed: {}", st))
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match parse_transition(s.as_bytes()) {
+            Ok((_, result)) => Ok(result),
+            _ => Err(format!("Could not parse: {}", s)),
         }
     }
+}
+
+fn parse_transition<T>(input: &[u8]) -> IResult<&[u8], Transition<T>>
+where
+    T: FromStr,
+    T::Err: Debug,
+{
+    do_parse!(
+        input,
+        tag!("transition:")
+            >> take_while!(is_space)
+            >> source_state: parse_token
+            >> take_while!(is_space)
+            >> alt!(tag!("->") | tag!("→"))
+            >> take_while!(is_space)
+            >> symbol: parse_token
+            >> take_while!(is_space)
+            >> target_states:
+                call!(|x| parse_vec(x, parse_token, "(", ")", ","))
+            >> take_while!(is_space)
+            >> probability:
+                opt!(complete!(do_parse!(
+                    tag!("#")
+                        >> take_while!(is_space)
+                        >> pr: map_res!(
+                            alt_complete!(is_not!(" \n") | rest),
+                            from_utf8
+                        )
+                        >> (pr.parse().unwrap())
+                )))
+            >> opt!(complete!(do_parse!(
+                take_while!(is_space) >> parse_comment >> ()
+            )))
+            >> (Transition {
+                source_state: source_state,
+                symbol: symbol,
+                target_states: target_states,
+                probability: probability.unwrap_or(LogDomain::one())
+            })
+    )
 }
 
 /// Parses a token (i.e. a terminal symbol or a non-terminal symbol).
@@ -102,7 +129,7 @@ where
                     tag!("\""),
                     escaped!(is_not!("\"\\"), '\\', one_of!("\\\"")),
                     tag!("\"")
-                ) | is_not!(" \\\"-→,;)]%#")
+                ) | is_not!(" \\\"-→,;()]%#")
             ),
             from_utf8
         )
@@ -157,4 +184,9 @@ where
             >> result: call!(|x| parse_vec(x, parse_token, "[", "]", ","))
             >> (result)
     )
+}
+
+/// Consumes any string that begins with the character `%`.
+pub fn parse_comment(input: &[u8]) -> IResult<&[u8], ()> {
+    do_parse!(input, tag!("%") >> take_while!(|_| true) >> (()))
 }

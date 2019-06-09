@@ -6,15 +6,20 @@ use nom::{
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::fmt::Display;
+use std::hash::Hash;
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Tree {
-    pub root: char,
-    pub children: Vec<Tree>,
+pub struct Tree<A> {
+    pub root: A,
+    pub children: Vec<Tree<A>>,
 }
 
-impl Tree {
+impl<A> Tree<A>
+where
+    A: Eq + Hash,
+{
     pub fn get_height(&self) -> usize {
         if self.children.is_empty() {
             1
@@ -27,12 +32,13 @@ impl Tree {
         }
     }
 
-    pub fn extend(&mut self, s: char, sigma: &HashMap<char, usize>) {
+    // TODO move rank to symbol
+    pub fn extend(&mut self, s: A, sigma: &HashMap<A, usize>) {
         let mut t_stack = Vec::new();
         t_stack.push(self);
         while !t_stack.is_empty() {
             let t = t_stack.pop().unwrap();
-            if t.children.len() < sigma[&t.root] {
+            if &t.children.len() < sigma.get(&t.root).unwrap() {
                 t.children.push(Tree {
                     root: s,
                     children: Vec::new(),
@@ -46,33 +52,20 @@ impl Tree {
         }
     }
 
-    fn to_string(&self) -> String {
-        let mut ret = self.root.to_string();
-        if !self.children.is_empty() {
-            ret.push_str("( ");
-            for t_i in &self.children {
-                ret.push_str(&t_i.to_string());
-                ret.push_str(", ");
-            }
-            ret.pop();
-            ret.pop();
-            ret.push_str(" )");
-        }
-        ret
-    }
-
-    // TODO shorten
-    pub fn from_sexp(sexp: SExp) -> Tree {
+    // TODO use generics/shorten
+    pub fn from_sexp(sexp: SExp) -> Tree<char> {
         let mut content = Vec::new();
         if let SExp::List(a) = sexp {
             content = a.to_vec();
         }
-        let mut children: Vec<Tree> = Vec::new();
+        let mut children: Vec<Tree<char>> = Vec::new();
         let mut symbol = 'a';
         for sxp in content {
             match sxp {
                 SExp::Atom(s) => symbol = s.chars().collect::<Vec<char>>()[0],
-                SExp::List(s) => children.push(Tree::from_sexp(SExp::List(s))),
+                SExp::List(s) => {
+                    children.push(Tree::<char>::from_sexp(SExp::List(s)))
+                }
             }
         }
         Tree {
@@ -82,9 +75,29 @@ impl Tree {
     }
 }
 
-impl fmt::Display for Tree {
+impl<A> fmt::Display for Tree<A>
+where
+    A: Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        fn to_string<A>(xi: &Tree<A>) -> String
+        where
+            A: Display,
+        {
+            let mut ret = xi.root.to_string();
+            if !xi.children.is_empty() {
+                ret.push_str("( ");
+                for t_i in &xi.children {
+                    ret.push_str(&to_string(&t_i));
+                    ret.push_str(", ");
+                }
+                ret.pop();
+                ret.pop();
+                ret.push_str(" )");
+            }
+            ret
+        }
+        write!(f, "{}", to_string(self))
     }
 }
 
@@ -144,10 +157,10 @@ impl FromStr for SExp {
     }
 }
 
-impl FromStr for Tree {
+impl FromStr for Tree<char> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Tree::from_sexp(s.parse()?))
+        Ok(Tree::<char>::from_sexp(s.parse()?))
     }
 }
