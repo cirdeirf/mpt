@@ -5,49 +5,9 @@ use log_domain::LogDomain;
 use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use tree::Tree;
-
-pub struct TreePrMap<T> {
-    prefix_probability: HashMap<Tree<T>, Vec<LogDomain<f64>>>,
-    probability: HashMap<Tree<T>, Vec<LogDomain<f64>>>,
-}
-
-impl<T> TreePrMap<T>
-where
-    T: Eq + Hash,
-{
-    pub fn get_probability(
-        &self,
-        xi: &Tree<T>,
-        prefix: bool,
-    ) -> Option<&Vec<LogDomain<f64>>> {
-        match prefix {
-            true => self.prefix_probability.get(&xi),
-            false => self.probability.get(&xi),
-        }
-    }
-
-    pub fn contains_key(&self, xi: &Tree<T>, prefix: bool) -> bool {
-        match prefix {
-            true => self.prefix_probability.contains_key(&xi),
-            false => self.probability.contains_key(&xi),
-        }
-    }
-
-    pub fn insert_probability(
-        &mut self,
-        xi: Tree<T>,
-        probability: Vec<LogDomain<f64>>,
-        prefix: bool,
-    ) {
-        match prefix {
-            true => self.prefix_probability.insert(xi, probability),
-            false => self.probability.insert(xi, probability),
-        };
-    }
-}
 
 pub struct PTA<T> {
     pub sigma: HashMap<T, usize>,
@@ -89,27 +49,30 @@ where
 
     pub fn probability(
         &self,
-        xi: &Tree<T>,
-        mut tree_pr_map: &mut TreePrMap<T>,
+        xi: &mut Tree<T>,
+        mut pp_set: &mut HashSet<Tree<T>>,
+        mut pr_set: &mut HashSet<Tree<T>>,
     ) -> LogDomain<f64> {
-        self.rec_probability_root(xi, false, &mut tree_pr_map)
+        self.rec_probability_root(xi, false, &mut pp_set, &mut pr_set)
     }
 
     pub fn prefix_probability(
         &self,
-        xi: &Tree<T>,
-        mut tree_pr_map: &mut TreePrMap<T>,
+        xi: &mut Tree<T>,
+        mut pp_set: &mut HashSet<Tree<T>>,
+        mut pr_set: &mut HashSet<Tree<T>>,
     ) -> LogDomain<f64> {
-        self.rec_probability_root(xi, true, &mut tree_pr_map)
+        self.rec_probability_root(xi, true, &mut pp_set, &mut pr_set)
     }
 
     fn potential_probability(
         &self,
-        xi: &Tree<T>,
-        mut tree_pr_map: &mut TreePrMap<T>,
+        xi: &mut Tree<T>,
+        mut pp_set: &mut HashSet<Tree<T>>,
+        mut pr_set: &mut HashSet<Tree<T>>,
     ) -> LogDomain<f64> {
         cmp::min(
-            self.prefix_probability(xi, &mut tree_pr_map),
+            self.prefix_probability(xi, &mut pp_set, &mut pr_set),
             LogDomain::new(
                 self.number_states.pow(2) as f64 / xi.get_height() as f64,
             )
@@ -119,11 +82,12 @@ where
 
     fn rec_probability_root(
         &self,
-        xi: &Tree<T>,
+        xi: &mut Tree<T>,
         prefix: bool,
-        mut tree_pr_map: &mut TreePrMap<T>,
+        mut pp_set: &mut HashSet<Tree<T>>,
+        mut pr_set: &mut HashSet<Tree<T>>,
     ) -> LogDomain<f64> {
-        self.rec_probability(xi, prefix, &mut tree_pr_map)
+        self.rec_probability(xi, prefix, &mut pp_set, &mut pr_set)
             .iter()
             .zip(&self.root_weights)
             .map(|(&p_q, &root_q)| p_q * root_q)
@@ -132,17 +96,16 @@ where
 
     fn rec_probability(
         &self,
-        xi: &Tree<T>,
+        xi: &mut Tree<T>,
         prefix: bool,
-        mut tree_pr_map: &mut TreePrMap<T>,
-        // mut b: &mut TreeMap<T>,
+        mut pp_set: &mut HashSet<Tree<T>>,
+        mut pr_set: &mut HashSet<Tree<T>>,
     ) -> Vec<LogDomain<f64>> {
-        if tree_pr_map.contains_key(xi, prefix) {
-            return tree_pr_map.get_probability(xi, prefix).unwrap().clone();
+        if prefix && pp_set.contains(&xi) {
+            return pp_set.get(&xi).unwrap().prefix_pr.clone();
+        } else if !prefix && pr_set.contains(&xi) {
+            return pr_set.get(&xi).unwrap().probability.clone();
         }
-        // if b.contains_key(&xi) && !prefix {
-        //     return b.get(xi).unwrap().clone();
-        // }
         let transitions = self.transitions.get(&xi.root).unwrap();
 
         let mut ret: Vec<LogDomain<f64>> = Vec::new();
@@ -156,11 +119,14 @@ where
             {
                 let mut p_t = t.probability;
                 for (i, q_i) in t.target_states.iter().enumerate() {
-                    match xi.children.get(i) {
+                    match xi.children.get_mut(i) {
                         Some(t_i) => {
-                            p_t *= self
-                                .rec_probability(t_i, prefix, &mut tree_pr_map) //, &mut b)
-                                [*q_i]
+                            p_t *= self.rec_probability(
+                                t_i,
+                                prefix,
+                                &mut pp_set,
+                                &mut pr_set,
+                            )[*q_i]
                         }
                         None if prefix => continue,
                         None => {
@@ -173,31 +139,27 @@ where
             }
             ret.push(p_q);
         }
-        if !tree_pr_map.contains_key(&xi, prefix) {
-            tree_pr_map.insert_probability(xi.clone(), ret.clone(), prefix);
+        if prefix && !pp_set.contains(&xi) {
+            xi.prefix_pr = ret.clone();
+            pp_set.insert(xi.clone());
+        } else if !prefix && !pr_set.contains(&xi) {
+            xi.probability = ret.clone();
+            pr_set.insert(xi.clone());
         }
-        // if !b.contains_key(&xi) && !prefix {
-        //     &mut b.insert(xi.clone(), ret.clone());
-        // }
         ret
     }
 
     pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>) {
         let mut current_prop = LogDomain::zero();
         let mut current_best;
-        let mut tree_pr_map: TreePrMap<T> = TreePrMap {
-            prefix_probability: HashMap::new(),
-            probability: HashMap::new(),
-        };
-        // let mut b: TreeMap<T> = HashMap::new();
+        let mut pp_set = HashSet::new();
+        let mut pr_set = HashSet::new();
 
         let mut q = PriorityQueue::new();
         for (s, _) in &self.sigma {
-            let t = Tree {
-                root: s.clone(),
-                children: Vec::new(),
-            };
-            let pp = self.potential_probability(&t, &mut tree_pr_map); //, &mut b);
+            let mut t = Tree::new(s.clone());
+            let pp =
+                self.potential_probability(&mut t, &mut pp_set, &mut pr_set);
             q.push(t, pp);
         }
 
@@ -209,14 +171,13 @@ where
             //     println!("\t({} \t {})", pp, t);
             // }
             // println!("]");
-
-            let (t, pp) = q.pop().unwrap();
+            let (mut t, pp) = q.pop().unwrap();
             // println!("PP({}) \t {}", t, pp);
             // return (current_best, current_prop);
 
             if pp > current_prop {
-                let p = self.probability(&t, &mut tree_pr_map); //a, &mut b);
-                                                                // println!("P({}) \t {}", t, p);
+                let p = self.probability(&mut t, &mut pp_set, &mut pr_set);
+                // println!("P({}) \t {}", t, p);
                 if p > current_prop {
                     current_prop = p;
                     current_best = t.clone();
@@ -227,9 +188,12 @@ where
                     let mut t_s = t.clone();
                     t_s.extend(s.clone(), &self.sigma);
                     // println!("t_s: {}", t_s);
-                    let pp_t_s =
-                        self.potential_probability(&t_s, &mut tree_pr_map); //a, &mut b);
-                                                                            // println!("t_s: {}\t{}", t_s, pp_t_s);
+                    let pp_t_s = self.potential_probability(
+                        &mut t_s,
+                        &mut pp_set,
+                        &mut pr_set,
+                    );
+                    // println!("t_s: {}\t{}", t_s, pp_t_s);
                     if pp_t_s > current_prop {
                         q.push(t_s, pp_t_s);
                     }

@@ -1,3 +1,4 @@
+use log_domain::LogDomain;
 use nom::simple_errors::Context;
 use nom::{
     alt, char, do_parse, many0, many1, named, separated_nonempty_list, tag,
@@ -7,19 +8,49 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Eq, Clone)]
 pub struct Tree<A> {
     pub root: A,
     pub children: Vec<Tree<A>>,
+    pub probability: Vec<LogDomain<f64>>,
+    pub prefix_pr: Vec<LogDomain<f64>>,
+}
+
+impl<A> PartialEq for Tree<A>
+where
+    A: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.root == other.root && self.children == other.children
+    }
+}
+
+impl<A> Hash for Tree<A>
+where
+    A: Hash,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.root.hash(state);
+        self.children.hash(state);
+    }
 }
 
 impl<A> Tree<A>
 where
     A: Eq + Hash,
 {
+    pub fn new(root_symbol: A) -> Tree<A> {
+        Tree {
+            root: root_symbol,
+            children: Vec::new(),
+            probability: Vec::new(),
+            prefix_pr: Vec::new(),
+        }
+    }
+
     pub fn get_height(&self) -> usize {
         if self.children.is_empty() {
             1
@@ -39,10 +70,7 @@ where
         while !t_stack.is_empty() {
             let t = t_stack.pop().unwrap();
             if &t.children.len() < sigma.get(&t.root).unwrap() {
-                t.children.push(Tree {
-                    root: s,
-                    children: Vec::new(),
-                });
+                t.children.push(Tree::new(s));
                 break;
             } else {
                 for t_i in &mut t.children {
@@ -71,6 +99,8 @@ where
         Tree {
             root: symbol,
             children: children,
+            probability: Vec::new(),
+            prefix_pr: Vec::new(),
         }
     }
 }
