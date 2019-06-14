@@ -13,7 +13,7 @@ pub struct PTA<T> {
     pub sigma: HashMap<T, usize>,
     pub number_states: usize,
     pub root_weights: Vec<LogDomain<f64>>,
-    pub transitions: HashMap<T, Vec<Transition<T>>>,
+    pub transitions: HashMap<T, HashMap<usize, Vec<Transition<T>>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -30,14 +30,18 @@ where
 {
     pub fn new(
         root_weights: Vec<LogDomain<f64>>,
-        transitions: HashMap<T, Vec<Transition<T>>>,
+        transitions: HashMap<T, HashMap<usize, Vec<Transition<T>>>>,
     ) -> PTA<T> {
         let mut sigma = HashMap::new();
-        for k in transitions.keys() {
-            sigma.insert(
-                k.clone(),
-                transitions.get(&k).unwrap()[0].target_states.len(),
-            );
+        for (s, s_hashmap) in transitions.iter() {
+            for q in s_hashmap.keys() {
+                sigma.insert(
+                    s.clone(),
+                    transitions.get(&s).unwrap().get(&q).unwrap()[0]
+                        .target_states
+                        .len(),
+                );
+            }
         }
         PTA {
             sigma: sigma,
@@ -102,51 +106,50 @@ where
         mut pr_set: &mut HashSet<Tree<T>>,
     ) -> Vec<LogDomain<f64>> {
         if prefix && pp_set.contains(&xi) {
-            return pp_set.get(&xi).unwrap().prefix_pr.clone();
+            pp_set.get(&xi).unwrap().prefix_pr.clone()
         } else if !prefix && pr_set.contains(&xi) {
-            return pr_set.get(&xi).unwrap().probability.clone();
-        }
-        let transitions = self.transitions.get(&xi.root).unwrap();
+            pr_set.get(&xi).unwrap().probability.clone()
+        } else {
+            let transitions = self.transitions.get(&xi.root).unwrap();
 
-        let mut ret: Vec<LogDomain<f64>> = Vec::new();
-        for q in 0..self.number_states {
-            let mut p_q = LogDomain::zero();
+            let mut ret: Vec<LogDomain<f64>> = Vec::new();
+            for q in 0..self.number_states {
+                let mut p_q = LogDomain::zero();
 
-            for t in transitions
-                .iter()
-                .filter(|&t| t.source_state == q)
-                .collect::<Vec<&Transition<T>>>()
-            {
-                let mut p_t = t.probability;
-                for (i, q_i) in t.target_states.iter().enumerate() {
-                    match xi.children.get_mut(i) {
-                        Some(t_i) => {
-                            p_t *= self.rec_probability(
-                                t_i,
-                                prefix,
-                                &mut pp_set,
-                                &mut pr_set,
-                            )[*q_i]
+                if let Some(v) = transitions.get(&q) {
+                    for t in v {
+                        let mut p_t = t.probability;
+                        for (i, q_i) in t.target_states.iter().enumerate() {
+                            match xi.children.get_mut(i) {
+                                Some(t_i) => {
+                                    p_t *= self.rec_probability(
+                                        t_i,
+                                        prefix,
+                                        &mut pp_set,
+                                        &mut pr_set,
+                                    )[*q_i]
+                                }
+                                None if prefix => continue,
+                                None => {
+                                    p_t = LogDomain::zero();
+                                    break;
+                                }
+                            };
                         }
-                        None if prefix => continue,
-                        None => {
-                            p_t = LogDomain::zero();
-                            break;
-                        }
-                    };
+                        p_q += p_t;
+                    }
                 }
-                p_q += p_t;
+                ret.push(p_q);
             }
-            ret.push(p_q);
+            if prefix {
+                xi.prefix_pr = ret.clone();
+                pp_set.insert(xi.clone());
+            } else {
+                xi.probability = ret.clone();
+                pr_set.insert(xi.clone());
+            }
+            ret
         }
-        if prefix && !pp_set.contains(&xi) {
-            xi.prefix_pr = ret.clone();
-            pp_set.insert(xi.clone());
-        } else if !prefix && !pr_set.contains(&xi) {
-            xi.probability = ret.clone();
-            pr_set.insert(xi.clone());
-        }
-        ret
     }
 
     pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>) {

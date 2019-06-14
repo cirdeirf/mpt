@@ -20,7 +20,8 @@ where
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut root_pr = Vec::new();
-        let mut transitions: HashMap<T, Vec<Transition<T>>> = HashMap::new();
+        let mut transitions: HashMap<T, HashMap<usize, Vec<Transition<T>>>> =
+            HashMap::new();
 
         let mut it = s.lines();
 
@@ -39,19 +40,38 @@ where
                 }
             } else if !l.is_empty() && !l.trim_start().starts_with("%") {
                 let t: Transition<T> = l.trim().parse()?;
-                // TODO maybe 2 calls on transitions is enough
-                if transitions.contains_key(&t.symbol) {
-                    transitions.get_mut(&t.symbol).unwrap().push(t);
-                } else {
-                    transitions.insert(t.symbol.clone(), vec![t]);
+
+                match transitions.get_mut(&t.symbol) {
+                    Some(h) => match h.get_mut(&t.source_state) {
+                        Some(v) => v.push(t),
+                        None => {
+                            h.insert(t.source_state, vec![t]);
+                        }
+                    },
+                    None => {
+                        transitions.insert(t.symbol.clone(), HashMap::new());
+                        transitions
+                            .get_mut(&t.symbol)
+                            .unwrap()
+                            .insert(t.source_state, vec![t]);
+                    }
                 }
+
+                // // TODO which is faster:
+                // HashMap<T, HashMap< usize, Vec<Transition>>> or
+                // HashMap<T, Vec<Transition>>?
+                // if transitions.contains_key(&t.symbol) {
+                //     transitions.get_mut(&t.symbol).unwrap().push(t);
+                // } else {
+                //     transitions.insert(t.symbol.clone(), vec![t]);
+                // }
             }
         }
         match (root_pr, transitions) {
             (ref r, ref tr) if r.len() == 0 || tr.len() == 0 => {
                 Err(format!("foo"))
             }
-            (r, tr) => Ok(PTA::new(r, tr)),
+            (root_pr, transitions) => Ok(PTA::new(root_pr, transitions)),
         }
     }
 }
