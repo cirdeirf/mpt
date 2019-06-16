@@ -25,6 +25,7 @@ fn main() {
                       transition: 4 -> g(5) # 1.0\n\
                       transition: 5 -> g(3) # 0.891";
     let pta: PTA<usize, char> = pta_string.parse().unwrap();
+    println!("{}", pta);
     let start_time = Instant::now();
     let mpt = pta.most_probable_tree();
     println!("{}\t{}", mpt.1, mpt.0);

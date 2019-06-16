@@ -7,7 +7,6 @@ use nom::{
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -19,6 +18,7 @@ pub struct Tree<A> {
     pub prefix_pr: Vec<LogDomain<f64>>,
 }
 
+/// `impl` of `PartialEq` that ignores the `weight` (to conform to the `impl` of `Hash`)
 impl<A> PartialEq for Tree<A>
 where
     A: PartialEq,
@@ -63,7 +63,6 @@ where
         }
     }
 
-    // TODO move rank to symbol
     pub fn extend(&mut self, s: A, sigma: &HashMap<A, usize>) {
         let mut t_stack = Vec::new();
         t_stack.push(self);
@@ -107,12 +106,12 @@ where
 
 impl<A> fmt::Display for Tree<A>
 where
-    A: Display,
+    A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fn to_string<A>(xi: &Tree<A>) -> String
         where
-            A: Display,
+            A: fmt::Display,
         {
             let mut ret = xi.root.to_string();
             if !xi.children.is_empty() {

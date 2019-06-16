@@ -8,6 +8,9 @@ use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Write;
 use std::hash::Hash;
 use transition::{Integerisable2, Transition};
 use tree::Tree;
@@ -238,6 +241,46 @@ where
             }
         }
         return (current_best, current_prop);
+    }
+}
+
+impl<Q, T> fmt::Display for PTA<Q, T>
+where
+    Q: fmt::Debug + Eq + Hash + Clone,
+    T: fmt::Display + Eq + Hash + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut ret: String = String::new();
+        for (q, p) in self.root_weights.iter().enumerate() {
+            if p != &LogDomain::zero() {
+                write!(
+                    &mut ret,
+                    "root: {:?} # {}\n",
+                    self.q_integeriser.find_value(q).unwrap(),
+                    p
+                )?;
+            }
+        }
+
+        for s_hashmap in self.transitions.values() {
+            for transitions in s_hashmap.values() {
+                for t in transitions {
+                    write!(
+                        &mut ret,
+                        "transition: {:?} -> {}({:?}) # {}\n",
+                        self.q_integeriser.find_value(t.source_state).unwrap(),
+                        self.t_integeriser.find_value(t.symbol).unwrap(),
+                        t.target_states
+                            .iter()
+                            .map(|q| self.q_integeriser.find_value(*q).unwrap())
+                            .collect::<Vec<&Q>>(),
+                        t.probability,
+                    )?;
+                }
+            }
+        }
+
+        write!(f, "{}", ret)
     }
 }
 
