@@ -1,70 +1,50 @@
 use crate::pta::{Transition, PTA};
-use log_domain::LogDomain;
 use nom::{
     alt, alt_complete, call, complete, delimited, do_parse, escaped, expr_res,
     is_not, is_space, many0, map_res, named, one_of, opt, rest, tag,
     take_while, IResult,
 };
-use num_traits::One;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::str::{from_utf8, FromStr};
 
-impl<T> FromStr for PTA<T>
+impl<Q, T> FromStr for PTA<Q, T>
 where
-    T: Eq + Hash + Clone + FromStr,
+    Q: Eq + Hash + Clone + FromStr + Debug,
+    Q::Err: Debug,
+    T: Eq + Hash + Clone + FromStr + Debug,
     T::Err: Debug,
 {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut root_pr = Vec::new();
-        let mut transitions: HashMap<T, HashMap<usize, Vec<Transition<T>>>> =
-            HashMap::new();
+        let mut root_pr = HashMap::new();
+        let mut transitions: Vec<Transition<Q, T>> = Vec::new();
 
         let mut it = s.lines();
 
         while let Some(l) = it.next() {
             if l.trim_start().starts_with("root:") {
                 match parse_root_pr(l.trim_start().as_bytes()) {
-                    Ok((_, result)) => {
-                        root_pr = result;
+                    Ok((_, (q, w))) => {
+                        if let Some(_) = root_pr.insert(q, w) {
+                            return Err(format!(
+                                "State has multiple root probabilities assigned: {}",
+                                    l
+                            ));
+                        };
                     }
                     _ => {
                         return Err(format!(
-                            "Malformed final declaration: {}",
+                            "Malformed root probability declaration: {}",
                             l
                         ));
                     }
                 }
             } else if !l.is_empty() && !l.trim_start().starts_with("%") {
-                let t: Transition<T> = l.trim().parse()?;
-
-                match transitions.get_mut(&t.symbol) {
-                    Some(h) => match h.get_mut(&t.source_state) {
-                        Some(v) => v.push(t),
-                        None => {
-                            h.insert(t.source_state, vec![t]);
-                        }
-                    },
-                    None => {
-                        transitions.insert(t.symbol.clone(), HashMap::new());
-                        transitions
-                            .get_mut(&t.symbol)
-                            .unwrap()
-                            .insert(t.source_state, vec![t]);
-                    }
-                }
-
-                // // TODO which is faster:
-                // HashMap<T, HashMap< usize, Vec<Transition>>> or
-                // HashMap<T, Vec<Transition>>?
-                // if transitions.contains_key(&t.symbol) {
-                //     transitions.get_mut(&t.symbol).unwrap().push(t);
-                // } else {
-                //     transitions.insert(t.symbol.clone(), vec![t]);
-                // }
+                let t: Transition<Q, T> = l.trim().parse()?;
+                transitions.push(t);
             }
         }
         match (root_pr, transitions) {
@@ -76,8 +56,10 @@ where
     }
 }
 
-impl<T> FromStr for Transition<T>
+impl<Q, T> FromStr for Transition<Q, T>
 where
+    Q: FromStr,
+    Q::Err: Debug,
     T: FromStr,
     T::Err: Debug,
 {
@@ -91,8 +73,10 @@ where
     }
 }
 
-fn parse_transition<T>(input: &[u8]) -> IResult<&[u8], Transition<T>>
+fn parse_transition<Q, T>(input: &[u8]) -> IResult<&[u8], Transition<Q, T>>
 where
+    Q: FromStr,
+    Q::Err: Debug,
     T: FromStr,
     T::Err: Debug,
 {
@@ -110,7 +94,7 @@ where
                 call!(|x| parse_vec(x, parse_token, "(", ")", ","))
             >> take_while!(is_space)
             >> probability:
-                opt!(complete!(do_parse!(
+                complete!(do_parse!(
                     tag!("#")
                         >> take_while!(is_space)
                         >> pr: map_res!(
@@ -118,7 +102,7 @@ where
                             from_utf8
                         )
                         >> (pr.parse().unwrap())
-                )))
+                ))
             >> opt!(complete!(do_parse!(
                 take_while!(is_space) >> parse_comment >> ()
             )))
@@ -126,7 +110,7 @@ where
                 source_state: source_state,
                 symbol: symbol,
                 target_states: target_states,
-                probability: probability.unwrap_or(LogDomain::one())
+                probability: probability,
             })
     )
 }
@@ -192,17 +176,32 @@ where
 
 /// TODO mention rustomata
 /// Parses a string of the form `finals: [...]` as a vector of final symbols of type `I`.
-pub fn parse_root_pr<I>(input: &[u8]) -> IResult<&[u8], Vec<I>>
+pub fn parse_root_pr<Q, W>(input: &[u8]) -> IResult<&[u8], (Q, W)>
 where
-    I: FromStr,
-    I::Err: Debug,
+    W: FromStr,
+    W::Err: Debug,
+    Q: FromStr,
+    Q::Err: Debug,
 {
     do_parse!(
         input,
         tag!("root:")
             >> take_while!(is_space)
-            >> result: call!(|x| parse_vec(x, parse_token, "[", "]", ","))
-            >> (result)
+            >> q: parse_token
+            >> take_while!(is_space)
+            >> w: complete!(do_parse!(
+                tag!("#")
+                    >> take_while!(is_space)
+                    >> pr: map_res!(
+                        alt_complete!(is_not!(" \n") | rest),
+                        from_utf8
+                    )
+                    >> (pr.parse().unwrap())
+            ))
+            >> opt!(complete!(do_parse!(
+                take_while!(is_space) >> parse_comment >> ()
+            )))
+            >> (q, w)
     )
 }
 

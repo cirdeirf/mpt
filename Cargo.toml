@@ -5,6 +5,7 @@ authors = ["Pius Meinert <yrr+work@pm.me>"]
 edition = "2018"
 
 [dependencies]
+integeriser = { git = "https://github.com/tud-fop/rust-integeriser.git" }
 log_domain = { git = "https://github.com/tud-fop/rust-log-domain.git" }
 nalgebra = "0.18"
 nom = "4.2.3"

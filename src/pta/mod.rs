@@ -1,53 +1,82 @@
 mod from_str;
+mod transition;
 pub mod tree;
 
+use integeriser::{HashIntegeriser, Integeriser};
 use log_domain::LogDomain;
 use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use transition::{Integerisable2, Transition};
 use tree::Tree;
 
-pub struct PTA<T> {
+pub struct PTA<Q, T>
+where
+    Q: Eq + Hash,
+    T: Eq + Hash,
+{
+    q_integeriser: HashIntegeriser<Q>,
+    t_integeriser: HashIntegeriser<T>,
     pub sigma: HashMap<T, usize>,
     pub number_states: usize,
     pub root_weights: Vec<LogDomain<f64>>,
-    pub transitions: HashMap<T, HashMap<usize, Vec<Transition<T>>>>,
+    pub transitions:
+        HashMap<usize, HashMap<usize, Vec<Transition<usize, usize>>>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Transition<T> {
-    source_state: usize,
-    symbol: T,
-    target_states: Vec<usize>,
-    probability: LogDomain<f64>,
-}
-
-impl<T> PTA<T>
+impl<Q, T> PTA<Q, T>
 where
-    T: Eq + Hash + Clone,
+    Q: Eq + Hash + Clone + Debug,
+    T: Eq + Hash + Clone + Debug,
 {
     pub fn new(
-        root_weights: Vec<LogDomain<f64>>,
-        transitions: HashMap<T, HashMap<usize, Vec<Transition<T>>>>,
-    ) -> PTA<T> {
+        root_weights: HashMap<Q, LogDomain<f64>>,
+        transitions: Vec<Transition<Q, T>>,
+    ) -> PTA<Q, T> {
+        let mut q_inter = HashIntegeriser::new();
+        let mut t_inter = HashIntegeriser::new();
+
         let mut sigma = HashMap::new();
-        for (s, s_hashmap) in transitions.iter() {
-            for q in s_hashmap.keys() {
-                sigma.insert(
-                    s.clone(),
-                    transitions.get(&s).unwrap().get(&q).unwrap()[0]
-                        .target_states
-                        .len(),
-                );
+        let mut root_pr: Vec<LogDomain<f64>> = Vec::new();
+        let mut transition_map: HashMap<
+            usize,
+            HashMap<usize, Vec<Transition<usize, usize>>>,
+        > = HashMap::new();
+
+        for t in &transitions {
+            sigma
+                .entry(t.symbol.clone())
+                .or_insert_with(|| t.target_states.len());
+        }
+
+        for t in transitions
+            .into_iter()
+            .map(|t| t.integerise(&mut q_inter, &mut t_inter))
+        {
+            transition_map
+                .entry(t.symbol)
+                .or_insert_with(HashMap::new)
+                .entry(t.source_state)
+                .or_insert_with(Vec::new)
+                .push(t);
+        }
+
+        for q in q_inter.values() {
+            match root_weights.get(q) {
+                Some(pr_q) => root_pr.push(*pr_q),
+                None => root_pr.push(LogDomain::zero()),
             }
         }
+
         PTA {
+            q_integeriser: q_inter,
+            t_integeriser: t_inter,
             sigma: sigma,
-            number_states: root_weights.len(),
-            root_weights: root_weights,
-            transitions: transitions,
+            number_states: root_pr.len(),
+            root_weights: root_pr,
+            transitions: transition_map,
         }
     }
 
@@ -110,7 +139,10 @@ where
         } else if !prefix && pr_set.contains(&xi) {
             pr_set.get(&xi).unwrap().probability.clone()
         } else {
-            let transitions = self.transitions.get(&xi.root).unwrap();
+            let transitions = self
+                .transitions
+                .get(&self.t_integeriser.find_key(&xi.root).unwrap())
+                .unwrap();
 
             let mut ret: Vec<LogDomain<f64>> = Vec::new();
             for q in 0..self.number_states {
@@ -215,7 +247,9 @@ mod tests {
 
     #[test]
     fn test_most_probable_tree() {
-        let pta_string = "root: [0.7, 0.2, 0.1]\n\
+        let pta_string = "root: 0 # 0.7\n\
+                          root: 1 # 0.2\n\
+                          root: 2 # 0.1\n\
                           transition: 1 -> a() # 0.5\n\
                           transition: 2 -> a() # 0.4\n\
                           transition: 1 -> b() # 0.2\n\
@@ -223,7 +257,7 @@ mod tests {
                           transition: 0 -> s(1, 1) # 0.9\n\
                           transition: 0 -> s(2, 2) # 0.1\n\
                           transition: 1 -> s(1, 2) # 0.3";
-        let pta: PTA<char> = pta_string.parse().unwrap();
+        let pta: PTA<usize, char> = pta_string.parse().unwrap();
         let mpt = pta.most_probable_tree();
         assert_eq!(mpt.0, "(s (a) (a))".parse().unwrap());
         assert_eq!(mpt.1, LogDomain::new(0.1807).unwrap());
@@ -231,7 +265,9 @@ mod tests {
 
     #[test]
     fn test_probability() {
-        let pta_string = "root: [0.7, 0.2, 0.1]\n\
+        let pta_string = "root: 0 # 0.7\n\
+                          root: 1 # 0.2\n\
+                          root: 2 # 0.1\n\
                           transition: 1 -> a() # 0.5\n\
                           transition: 2 -> a() # 0.4\n\
                           transition: 1 -> b() # 0.2\n\
@@ -239,23 +275,19 @@ mod tests {
                           transition: 0 -> s(1, 1) # 0.9\n\
                           transition: 0 -> s(2, 2) # 0.1\n\
                           transition: 1 -> s(1, 2) # 0.3";
-        let pta: PTA<char> = pta_string.parse().unwrap();
-        let xi = "(s (a) (b))".parse().unwrap();
+        let pta: PTA<usize, char> = pta_string.parse().unwrap();
+        let mut xi = "(s (a) (b))".parse().unwrap();
         assert_eq!(
-            pta.probability(
-                &xi,
-                &mut TreePrMap {
-                    prefix_probability: HashMap::new(),
-                    probability: HashMap::new(),
-                }
-            ),
+            pta.probability(&mut xi, &mut HashSet::new(), &mut HashSet::new(),),
             LogDomain::new(0.0978).unwrap()
         );
     }
 
     #[test]
     fn test_potential_probability() {
-        let pta_string = "root: [0.7, 0.2, 0.1]\n\
+        let pta_string = "root: 0 # 0.7\n\
+                          root: 1 # 0.2\n\
+                          root: 2 # 0.1\n\
                           transition: 1 -> a() # 0.5\n\
                           transition: 2 -> a() # 0.4\n\
                           transition: 1 -> b() # 0.2\n\
@@ -263,15 +295,13 @@ mod tests {
                           transition: 0 -> s(1, 1) # 0.9\n\
                           transition: 0 -> s(2, 2) # 0.1\n\
                           transition: 1 -> s(1, 2) # 0.3";
-        let pta: PTA<char> = pta_string.parse().unwrap();
-        let xi = "(s (a) (s))".parse().unwrap();
+        let pta: PTA<usize, char> = pta_string.parse().unwrap();
+        let mut xi = "(s (a) (s))".parse().unwrap();
         assert_eq!(
             pta.potential_probability(
-                &xi,
-                &mut TreePrMap {
-                    prefix_probability: HashMap::new(),
-                    probability: HashMap::new(),
-                }
+                &mut xi,
+                &mut HashSet::new(),
+                &mut HashSet::new(),
             ),
             LogDomain::new(0.0945).unwrap()
         );
