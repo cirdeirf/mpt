@@ -8,9 +8,7 @@ use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fmt::Debug;
-use std::fmt::Write;
+use std::fmt::{self, Debug, Display, Write};
 use std::hash::Hash;
 use transition::{Integerisable2, Transition};
 use tree::Tree;
@@ -22,19 +20,18 @@ where
 {
     q_integeriser: HashIntegeriser<Q>,
     t_integeriser: HashIntegeriser<T>,
-    pub sigma: HashMap<T, usize>,
-    pub number_states: usize,
-    pub root_weights: Vec<LogDomain<f64>>,
-    pub transitions:
-        HashMap<usize, HashMap<usize, Vec<Transition<usize, usize>>>>,
+    sigma: HashMap<T, usize>,
+    number_states: usize,
+    root_weights: Vec<LogDomain<f64>>,
+    transitions: HashMap<usize, HashMap<usize, Vec<Transition<usize, usize>>>>,
 }
 
 impl<Q, T> PTA<Q, T>
 where
     Q: Eq + Hash + Clone + Debug,
-    T: Eq + Hash + Clone + Debug,
+    T: Eq + Hash + Clone + Debug + Display,
 {
-    pub fn new(
+    fn new(
         root_weights: HashMap<Q, LogDomain<f64>>,
         transitions: Vec<Transition<Q, T>>,
     ) -> PTA<Q, T> {
@@ -83,16 +80,22 @@ where
         }
     }
 
-    pub fn probability(
+    fn probability(
         &self,
         xi: &mut Tree<T>,
         mut pp_set: &mut HashSet<Tree<T>>,
         mut pr_set: &mut HashSet<Tree<T>>,
     ) -> LogDomain<f64> {
+        // TODO test/completely remove fn probability and pr_set/probability vec
+        // xi.prefix_pr
+        //     .iter()
+        //     .zip(&self.root_weights)
+        //     .map(|(&p_q, &root_q)| p_q * root_q)
+        //     .sum()
         self.rec_probability_root(xi, false, &mut pp_set, &mut pr_set)
     }
 
-    pub fn prefix_probability(
+    fn prefix_probability(
         &self,
         xi: &mut Tree<T>,
         mut pp_set: &mut HashSet<Tree<T>>,
@@ -194,8 +197,10 @@ where
         let mut pr_set = HashSet::new();
 
         let mut q = PriorityQueue::new();
-        for (s, _) in &self.sigma {
+        for (s, rank) in &self.sigma {
             let mut t = Tree::new(s.clone());
+            // TODO comment
+            t.prefix = Some(rank != &0);
             let pp =
                 self.potential_probability(&mut t, &mut pp_set, &mut pr_set);
             q.push(t, pp);
@@ -204,36 +209,31 @@ where
         current_best = q.peek().unwrap().0.clone();
 
         while !q.is_empty() {
-            // println!("[");
-            // for (t, pp) in &q {
-            //     println!("\t({} \t {})", pp, t);
-            // }
-            // println!("]");
             let (mut t, pp) = q.pop().unwrap();
-            // println!("PP({}) \t {}", t, pp);
-            // return (current_best, current_prop);
 
             if pp > current_prop {
-                let p = self.probability(&mut t, &mut pp_set, &mut pr_set);
-                // println!("P({}) \t {}", t, p);
-                if p > current_prop {
-                    current_prop = p;
-                    current_best = t.clone();
-                }
-
-                // println!("\nt: {}", t);
-                for (s, _) in &self.sigma {
-                    let mut t_s = t.clone();
-                    t_s.extend(s.clone(), &self.sigma);
-                    // println!("t_s: {}", t_s);
-                    let pp_t_s = self.potential_probability(
-                        &mut t_s,
-                        &mut pp_set,
-                        &mut pr_set,
-                    );
-                    // println!("t_s: {}\t{}", t_s, pp_t_s);
-                    if pp_t_s > current_prop {
-                        q.push(t_s, pp_t_s);
+                if !t.prefix.unwrap() {
+                    let p = self.probability(&mut t, &mut pp_set, &mut pr_set);
+                    if p > current_prop {
+                        current_prop = p;
+                        current_best = t.clone();
+                    }
+                } else {
+                    for (s, _) in &self.sigma {
+                        let mut t_s = t.clone();
+                        if !t_s.extend(s.clone(), &self.sigma) {
+                            t.prefix = Some(false);
+                            q.push(t, pp);
+                            break;
+                        }
+                        let pp_t_s = self.potential_probability(
+                            &mut t_s,
+                            &mut pp_set,
+                            &mut pr_set,
+                        );
+                        if pp_t_s > current_prop {
+                            q.push(t_s, pp_t_s);
+                        }
                     }
                 }
             } else {
@@ -244,10 +244,10 @@ where
     }
 }
 
-impl<Q, T> fmt::Display for PTA<Q, T>
+impl<Q, T> Display for PTA<Q, T>
 where
-    Q: fmt::Debug + Eq + Hash + Clone,
-    T: fmt::Display + Eq + Hash + Clone,
+    Q: Debug + Eq + Hash + Clone,
+    T: Display + Eq + Hash + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut ret: String = String::new();

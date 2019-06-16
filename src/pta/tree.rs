@@ -16,6 +16,7 @@ pub struct Tree<A> {
     pub children: Vec<Tree<A>>,
     pub probability: Vec<LogDomain<f64>>,
     pub prefix_pr: Vec<LogDomain<f64>>,
+    pub prefix: Option<bool>,
 }
 
 /// `impl` of `PartialEq` that ignores the `weight` (to conform to the `impl` of `Hash`)
@@ -48,6 +49,7 @@ where
             children: Vec::new(),
             probability: Vec::new(),
             prefix_pr: Vec::new(),
+            prefix: None,
         }
     }
 
@@ -63,17 +65,21 @@ where
         }
     }
 
-    pub fn extend(&mut self, s: A, sigma: &HashMap<A, usize>) {
+    pub fn extend(&mut self, s: A, sigma: &HashMap<A, usize>) -> bool {
         let mut t_stack = Vec::new();
         t_stack.push(self);
-        while !t_stack.is_empty() {
-            let t = t_stack.pop().unwrap();
-            if &t.children.len() < sigma.get(&t.root).unwrap() {
-                t.children.push(Tree::new(s));
-                break;
+        loop {
+            if t_stack.is_empty() {
+                return false;
             } else {
-                for t_i in &mut t.children {
-                    t_stack.push(t_i);
+                let t = t_stack.pop().unwrap();
+                if &t.children.len() < sigma.get(&t.root).unwrap() {
+                    t.children.push(Tree::new(s));
+                    return true;
+                } else {
+                    for t_i in &mut t.children {
+                        t_stack.push(t_i);
+                    }
                 }
             }
         }
@@ -100,6 +106,7 @@ where
             children: children,
             probability: Vec::new(),
             prefix_pr: Vec::new(),
+            prefix: None,
         }
     }
 }

@@ -5,7 +5,7 @@ use nom::{
     take_while, IResult,
 };
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::str::{from_utf8, FromStr};
 
@@ -13,7 +13,7 @@ impl<Q, T> FromStr for PTA<Q, T>
 where
     Q: Eq + Hash + Clone + FromStr + Debug,
     Q::Err: Debug,
-    T: Eq + Hash + Clone + FromStr + Debug,
+    T: Eq + Hash + Clone + FromStr + Debug + Display,
     T::Err: Debug,
 {
     type Err = String;
