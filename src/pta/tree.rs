@@ -4,6 +4,7 @@ use nom::{
     alt, char, do_parse, many0, many1, named, separated_nonempty_list, tag,
     take_until_either, Err,
 };
+use num_traits::Zero;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -14,9 +15,9 @@ use std::str::FromStr;
 pub struct Tree<A> {
     pub root: A,
     pub children: Vec<Tree<A>>,
-    pub probability: Vec<LogDomain<f64>>,
-    pub prefix_pr: Vec<LogDomain<f64>>,
-    pub prefix: Option<bool>,
+    pub run: Vec<LogDomain<f64>>,
+    pub probability: LogDomain<f64>,
+    pub is_prefix: Option<bool>,
 }
 
 /// `impl` of `PartialEq` that ignores the `weight` (to conform to the `impl` of `Hash`)
@@ -47,9 +48,9 @@ where
         Tree {
             root: root_symbol,
             children: Vec::new(),
-            probability: Vec::new(),
-            prefix_pr: Vec::new(),
-            prefix: None,
+            run: Vec::new(),
+            is_prefix: None,
+            probability: LogDomain::zero(),
         }
     }
 
@@ -104,9 +105,9 @@ where
         Tree {
             root: symbol,
             children: children,
-            probability: Vec::new(),
-            prefix_pr: Vec::new(),
-            prefix: None,
+            run: Vec::new(),
+            is_prefix: None,
+            probability: LogDomain::zero(),
         }
     }
 }
