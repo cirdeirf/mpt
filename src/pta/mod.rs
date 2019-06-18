@@ -137,18 +137,14 @@ where
         xi: &mut Tree<T>,
         mut known_trees: &mut HashSet<Tree<T>>,
     ) -> LogDomain<f64> {
-        if xi.is_prefix.unwrap() {
-            let pr = self
-                .probability_rec(xi, &mut known_trees)
-                .iter()
-                .zip(&self.root_weights)
-                .map(|(&p_q, &root_q)| p_q * root_q)
-                .sum();
-            xi.probability = pr;
-            pr
-        } else {
-            xi.probability
-        }
+        let pr = self
+            .probability_rec(xi, &mut known_trees)
+            .iter()
+            .zip(&self.root_weights)
+            .map(|(&p_q, &root_q)| p_q * root_q)
+            .sum();
+        xi.probability = pr;
+        pr
     }
 
     pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>) {
@@ -172,11 +168,8 @@ where
 
             if pp > current_prop {
                 if !t.is_prefix.unwrap() {
-                    let p = self.probability(&mut t, &mut known_trees);
-                    if p > current_prop {
-                        current_prop = p;
-                        current_best = t.clone();
-                    }
+                    current_prop = pp;
+                    current_best = t.clone();
                 } else {
                     for (s, _) in &self.sigma {
                         let mut t_s = t.clone();
@@ -196,7 +189,7 @@ where
                 return (current_best, current_prop);
             }
         }
-        return (current_best, current_prop);
+        (current_best, current_prop)
     }
 }
 
