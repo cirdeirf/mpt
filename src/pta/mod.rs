@@ -168,8 +168,7 @@ where
 
             if pp > current_prop {
                 if !t.is_prefix.unwrap() {
-                    current_prop = pp;
-                    current_best = t.clone();
+                    return (t, pp);
                 } else {
                     for (s, _) in &self.sigma {
                         let mut t_s = t.clone();
@@ -180,6 +179,9 @@ where
                         }
                         let pp_t_s = self
                             .potential_probability(&mut t_s, &mut known_trees);
+                        if pp_t_s > pp {
+                            println!("{}\t{}", t_s, t);
+                        }
                         if pp_t_s > current_prop {
                             q.push(t_s, pp_t_s);
                         }
@@ -190,6 +192,125 @@ where
             }
         }
         (current_best, current_prop)
+    }
+
+    /// Dertermines the best/most probable parse.
+    /// Return the corrresponding tree and the run's probability.
+    /// This implementation is based on the BestParse algorithm depicted in
+    /// Figure 3 of "Parsing Algorithms based on Tree Automata" by Maletti and
+    /// Satta, 2009 [MS09, Figure 3] [MS09, Figure 3]
+    pub fn best_parse(&self) -> (Tree<T>, LogDomain<f64>) {
+        // flatten HashMaps, gather all transitions in one vector
+        let transitions: Vec<Transition<usize, usize>> = self
+            .transitions
+            .values()
+            .flat_map(|h| {
+                h.values()
+                    .map(|t| t.clone())
+                    .collect::<Vec<Vec<Transition<usize, usize>>>>()
+            })
+            .flatten()
+            .collect();
+
+        // get all root states (with non-null root weight)
+        let root_states: HashSet<usize> = self
+            .root_weights
+            .iter()
+            .enumerate()
+            .filter(|(_, &p)| p != LogDomain::zero())
+            .map(|(q, _)| q)
+            .collect();
+
+        // set of states available for application in new transitions
+        let mut explored_states: HashSet<usize> = HashSet::new();
+        // probabilities that can be achieved for a run that ends in given state
+        let mut best_probabilities: Vec<LogDomain<f64>> =
+            vec![LogDomain::zero(); self.number_states];
+        // best trees that can be obtained for a run that ends in given state
+        let mut best_trees: Vec<Option<Tree<T>>> =
+            vec![None; self.number_states];
+
+        // apply transitions until all root states are explored
+        while !root_states.is_subset(&explored_states) {
+            // set of states that are not yet explored but can be in one step
+            let reachable_states: HashSet<usize> = transitions
+                .iter()
+                .filter(|t| {
+                    !explored_states.contains(&t.source_state)
+                        && t.target_states
+                            .iter()
+                            .map(|q| *q)
+                            .collect::<HashSet<usize>>()
+                            .is_subset(&explored_states)
+                })
+                .map(|t| t.source_state)
+                .collect();
+
+            for q in &reachable_states {
+                let mut best_probabilities_max = LogDomain::zero();
+                // determine the transition that yields the best probability for
+                // a state (go through all transitions whose child states are
+                // explored but whose source state is not)
+                for t in transitions.iter().filter(|t| {
+                    t.target_states
+                        .iter()
+                        .map(|q| *q)
+                        .collect::<HashSet<usize>>()
+                        .is_subset(&explored_states)
+                        && t.source_state == *q
+                }) {
+                    // calculate the probability of applying transition t given
+                    // probabilities for each child state
+                    let pr = t.probability
+                        * t.target_states
+                            .iter()
+                            .map(|q_i| best_probabilities[*q_i])
+                            .product();
+                    // determine the best reachable probability
+                    if pr > best_probabilities_max {
+                        best_probabilities_max = pr;
+                        // construct the corresponding tree
+                        best_trees[*q] = Some(Tree::new_with_children(
+                            self.t_integeriser
+                                .find_value(t.symbol)
+                                .unwrap()
+                                .clone(),
+                            t.target_states
+                                .iter()
+                                .map(|q_i| best_trees[*q_i].clone().unwrap())
+                                .collect(),
+                        ));
+                    }
+                }
+                best_probabilities[*q] = best_probabilities_max;
+                // add only the state to the set of explored states with the
+                // best probability among all unexplored states
+                explored_states.insert(
+                    *reachable_states
+                        .iter()
+                        .max_by(|&q_1, &q_2| {
+                            best_probabilities[*q_1]
+                                .cmp(&best_probabilities[*q_2])
+                        })
+                        .unwrap(),
+                );
+            }
+        }
+
+        // apply root weights
+        best_probabilities = best_probabilities
+            .iter()
+            .zip(&self.root_weights)
+            .map(|(q, p)| *q * *p)
+            .collect::<Vec<LogDomain<f64>>>();
+
+        // return (tree, probability)-pair with maximal probability
+        best_probabilities
+            .iter()
+            .zip(best_trees)
+            .max_by(|(&p_1, _), (p_2, _)| p_1.cmp(p_2))
+            .map(|(p, t)| (t.unwrap(), *p))
+            .unwrap()
     }
 }
 

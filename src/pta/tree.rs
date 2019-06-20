@@ -54,6 +54,15 @@ where
         }
     }
 
+    pub fn new_with_children(
+        root_symbol: A,
+        children: Vec<Tree<A>>,
+    ) -> Tree<A> {
+        let mut tree = Tree::new(root_symbol);
+        tree.children = children;
+        tree
+    }
+
     pub fn get_height(&self) -> usize {
         if self.children.is_empty() {
             1

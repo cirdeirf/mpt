@@ -23,6 +23,11 @@ fn main() {
     println!("{}\t{}", mpt.1, mpt.0);
     println!("time: {:?}", start_time.elapsed());
 
+    println!("\nbest_parse");
+    let best_parse = pta.best_parse();
+    println!("{}\t{}", best_parse.1, best_parse.0);
+    println!("\n");
+
     // prime automaton for Psi = {2, 3}
     let pta_string = "root: 0 # 1.0\n\
                       transition: 2 -> a() # 0.109\n\
@@ -41,6 +46,10 @@ fn main() {
     let mpt = pta.most_probable_tree();
     println!("{}\t{}", mpt.1, mpt.0);
     println!("time: {:?}", start_time.elapsed());
+
+    println!("\nbest_parse");
+    let best_parse = pta.best_parse();
+    println!("{}\t{}", best_parse.1, best_parse.0);
 
     // let mut xi = "(s (b) (a))".parse().unwrap();
     // println!(
