@@ -418,4 +418,22 @@ mod tests {
             LogDomain::new(0.0945).unwrap()
         );
     }
+
+    #[test]
+    fn test_best_parse() {
+        let pta_string = "root: 0 # 0.7\n\
+                          root: 1 # 0.2\n\
+                          root: 2 # 0.1\n\
+                          transition: 1 -> a() # 0.5\n\
+                          transition: 2 -> a() # 0.4\n\
+                          transition: 1 -> b() # 0.2\n\
+                          transition: 2 -> b() # 0.6\n\
+                          transition: 0 -> s(1, 1) # 0.9\n\
+                          transition: 0 -> s(2, 2) # 0.1\n\
+                          transition: 1 -> s(1, 2) # 0.3";
+        let pta: PTA<usize, char> = pta_string.parse().unwrap();
+        let best_parse = pta.best_parse();
+        assert_eq!(best_parse.0, "(s (a) (a))".parse().unwrap());
+        assert_eq!(best_parse.1, LogDomain::new(0.1575).unwrap());
+    }
 }
