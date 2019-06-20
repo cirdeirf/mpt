@@ -166,29 +166,27 @@ where
         while !q.is_empty() {
             let (mut t, pp) = q.pop().unwrap();
 
-            if pp > current_prop {
-                if !t.is_prefix.unwrap() {
-                    return (t, pp);
-                } else {
-                    for (s, _) in &self.sigma {
-                        let mut t_s = t.clone();
-                        if !t_s.extend(s.clone(), &self.sigma) {
-                            t.is_prefix = Some(false);
-                            q.push(t, pp);
-                            break;
-                        }
-                        let pp_t_s = self
-                            .potential_probability(&mut t_s, &mut known_trees);
-                        if pp_t_s > pp {
-                            println!("{}\t{}", t_s, t);
-                        }
-                        if pp_t_s > current_prop {
-                            q.push(t_s, pp_t_s);
-                        }
+            // ξ ∈ T_Σ
+            if !t.is_prefix.unwrap() {
+                current_best = t;
+                current_prop = pp;
+                break;
+            }
+            // ξ ∉ T_Σ (contains variables, i.e., is a prefix-tree/context)
+            else {
+                for (s, _) in &self.sigma {
+                    let mut t_s = t.clone();
+                    if !t_s.extend(s.clone(), &self.sigma) {
+                        t.is_prefix = Some(false);
+                        q.push(t, pp);
+                        break;
+                    }
+                    let pp_t_s =
+                        self.potential_probability(&mut t_s, &mut known_trees);
+                    if pp_t_s > current_prop {
+                        q.push(t_s, pp_t_s);
                     }
                 }
-            } else {
-                return (current_best, current_prop);
             }
         }
         (current_best, current_prop)
