@@ -164,7 +164,7 @@ where
         current_best = q.peek().unwrap().0.clone();
 
         while !q.is_empty() {
-            let (mut t, pp) = q.pop().unwrap();
+            let (t, pp) = q.pop().unwrap();
 
             // ξ ∈ T_Σ
             if !t.is_prefix.unwrap() {
@@ -176,14 +176,19 @@ where
             else {
                 for (s, _) in &self.sigma {
                     let mut t_s = t.clone();
-                    if !t_s.extend(s.clone(), &self.sigma) {
-                        t.is_prefix = Some(false);
-                        q.push(t, pp);
-                        break;
-                    }
+
+                    t_s.is_prefix = Some(t_s.extend(s, &self.sigma));
                     let pp_t_s =
                         self.potential_probability(&mut t_s, &mut known_trees);
+
+                    // do not add (prefix-)trees to the queue that are worse
+                    // than the current best complete tree
                     if pp_t_s > current_prop {
+                        // ξ ∈ T_Σ (t_s complete + better than the current best)
+                        if !t_s.is_prefix.unwrap() {
+                            current_best = t_s.clone();
+                            current_prop = pp_t_s;
+                        }
                         q.push(t_s, pp_t_s);
                     }
                 }

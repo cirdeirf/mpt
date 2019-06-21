@@ -42,7 +42,7 @@ where
 
 impl<A> Tree<A>
 where
-    A: Eq + Hash,
+    A: Eq + Hash + Clone,
 {
     pub fn new(root_symbol: A) -> Tree<A> {
         Tree {
@@ -75,24 +75,31 @@ where
         }
     }
 
-    pub fn extend(&mut self, s: A, sigma: &HashMap<A, usize>) -> bool {
+    pub fn extend(&mut self, symbol: &A, sigma: &HashMap<A, usize>) -> bool {
+        let mut prefix = false;
+        let mut extended = false;
+
         let mut t_stack = Vec::new();
         t_stack.push(self);
-        loop {
-            if t_stack.is_empty() {
-                return false;
-            } else {
-                let t = t_stack.pop().unwrap();
-                if &t.children.len() < sigma.get(&t.root).unwrap() {
-                    t.children.push(Tree::new(s));
-                    return true;
+
+        while !t_stack.is_empty() {
+            let t = t_stack.pop().unwrap();
+            if &t.children.len() < sigma.get(&t.root).unwrap() {
+                if extended {
+                    prefix = true;
+                    break;
                 } else {
-                    for t_i in &mut t.children {
-                        t_stack.push(t_i);
-                    }
+                    t.children.push(Tree::new((*symbol).clone()));
+                    t_stack.push(t);
+                }
+                extended = !extended;
+            } else {
+                for t_i in &mut t.children {
+                    t_stack.push(t_i);
                 }
             }
         }
+        prefix
     }
 
     // TODO use generics/shorten
