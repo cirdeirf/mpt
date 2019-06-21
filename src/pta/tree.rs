@@ -84,7 +84,7 @@ where
 
         while !t_stack.is_empty() {
             let t = t_stack.pop().unwrap();
-            if &t.children.len() < sigma.get(&t.root).unwrap() {
+            if t.children.len() < *sigma.get(&t.root).unwrap() {
                 if extended {
                     prefix = true;
                     break;
@@ -109,18 +109,18 @@ where
             content = a.to_vec();
         }
         let mut children: Vec<Tree<char>> = Vec::new();
-        let mut symbol = 'a';
+        let mut root = 'a';
         for sxp in content {
             match sxp {
-                SExp::Atom(s) => symbol = s.chars().collect::<Vec<char>>()[0],
+                SExp::Atom(s) => root = s.chars().collect::<Vec<char>>()[0],
                 SExp::List(s) => {
                     children.push(Tree::<char>::from_sexp(SExp::List(s)))
                 }
             }
         }
         Tree {
-            root: symbol,
-            children: children,
+            root,
+            children,
             run: Vec::new(),
             is_prefix: None,
             probability: LogDomain::zero(),

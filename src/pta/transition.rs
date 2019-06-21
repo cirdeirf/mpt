@@ -32,7 +32,7 @@ where
                 .iter()
                 .map(|q| integeriser1.integerise(q.clone()))
                 .collect(),
-            probability: self.probability.clone(),
+            probability: self.probability,
         }
     }
 
@@ -52,7 +52,7 @@ where
                 .iter()
                 .map(|q| integeriser1.find_value(*q).unwrap().clone())
                 .collect(),
-            probability: v.probability.clone(),
+            probability: v.probability,
         }
     }
 }

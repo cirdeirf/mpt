@@ -22,13 +22,11 @@ where
         let mut root_pr = HashMap::new();
         let mut transitions: Vec<Transition<Q, T>> = Vec::new();
 
-        let mut it = s.lines();
-
-        while let Some(l) = it.next() {
+        for l in s.lines() {
             if l.trim_start().starts_with("root:") {
                 match parse_root_pr(l.trim_start().as_bytes()) {
                     Ok((_, (q, w))) => {
-                        if let Some(_) = root_pr.insert(q, w) {
+                        if root_pr.insert(q, w).is_some() {
                             return Err(format!(
                                 "State has multiple root probabilities assigned: {}",
                                     l
@@ -42,15 +40,17 @@ where
                         ));
                     }
                 }
-            } else if !l.is_empty() && !l.trim_start().starts_with("%") {
+            } else if !l.is_empty() && !l.trim_start().starts_with('%') {
                 let t: Transition<Q, T> = l.trim().parse()?;
                 transitions.push(t);
             }
         }
         match (root_pr, transitions) {
-            (ref r, ref tr) if r.len() == 0 || tr.len() == 0 => {
-                Err(format!("foo"))
-            }
+            (ref r, ref tr) if r.is_empty() || tr.is_empty() => Err(
+                "Incomplete pta definition (root weights and transitions are\
+                 necessary)"
+                    .to_string(),
+            ),
             (root_pr, transitions) => Ok(PTA::new(root_pr, transitions)),
         }
     }
@@ -93,16 +93,7 @@ where
             >> target_states:
                 call!(|x| parse_vec(x, parse_token, "(", ")", ","))
             >> take_while!(is_space)
-            >> probability:
-                complete!(do_parse!(
-                    tag!("#")
-                        >> take_while!(is_space)
-                        >> pr: map_res!(
-                            alt_complete!(is_not!(" \n") | rest),
-                            from_utf8
-                        )
-                        >> (pr.parse().unwrap())
-                ))
+            >> probability: parse_weight
             >> opt!(complete!(do_parse!(
                 take_while!(is_space) >> parse_comment >> ()
             )))
@@ -174,6 +165,25 @@ where
     )
 }
 
+fn parse_weight<W>(input: &[u8]) -> IResult<&[u8], W>
+where
+    W: FromStr,
+    W::Err: Debug,
+{
+    do_parse!(
+        input,
+        w: complete!(do_parse!(
+            tag!("#")
+                >> take_while!(is_space)
+                >> pr: map_res!(
+                    alt_complete!(is_not!(" \n") | rest),
+                    from_utf8
+                )
+                >> (pr.parse().unwrap())
+        )) >> (w)
+    )
+}
+
 /// TODO mention rustomata
 /// Parses a string of the form `finals: [...]` as a vector of final symbols of type `I`.
 pub fn parse_root_pr<Q, W>(input: &[u8]) -> IResult<&[u8], (Q, W)>
@@ -189,15 +199,7 @@ where
             >> take_while!(is_space)
             >> q: parse_token
             >> take_while!(is_space)
-            >> w: complete!(do_parse!(
-                tag!("#")
-                    >> take_while!(is_space)
-                    >> pr: map_res!(
-                        alt_complete!(is_not!(" \n") | rest),
-                        from_utf8
-                    )
-                    >> (pr.parse().unwrap())
-            ))
+            >> w: parse_weight
             >> opt!(complete!(do_parse!(
                 take_while!(is_space) >> parse_comment >> ()
             )))

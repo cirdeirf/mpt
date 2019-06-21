@@ -32,30 +32,28 @@ where
     T: Eq + Hash + Clone + Debug + Display,
 {
     fn new(
-        root_weights: HashMap<Q, LogDomain<f64>>,
-        transitions: Vec<Transition<Q, T>>,
+        root_weight_map: HashMap<Q, LogDomain<f64>>,
+        transitions_vec: Vec<Transition<Q, T>>,
     ) -> PTA<Q, T> {
-        let mut q_inter = HashIntegeriser::new();
-        let mut t_inter = HashIntegeriser::new();
+        let mut q_integeriser = HashIntegeriser::new();
+        let mut t_integeriser = HashIntegeriser::new();
 
         let mut sigma = HashMap::new();
-        let mut root_pr: Vec<LogDomain<f64>> = Vec::new();
-        let mut transition_map: HashMap<
-            usize,
-            HashMap<usize, Vec<Transition<usize, usize>>>,
-        > = HashMap::new();
-
-        for t in &transitions {
+        for t in &transitions_vec {
             sigma
                 .entry(t.symbol.clone())
                 .or_insert_with(|| t.target_states.len());
         }
 
-        for t in transitions
+        let mut transitions: HashMap<
+            usize,
+            HashMap<usize, Vec<Transition<usize, usize>>>,
+        > = HashMap::new();
+        for t in transitions_vec
             .into_iter()
-            .map(|t| t.integerise(&mut q_inter, &mut t_inter))
+            .map(|t| t.integerise(&mut q_integeriser, &mut t_integeriser))
         {
-            transition_map
+            transitions
                 .entry(t.symbol)
                 .or_insert_with(HashMap::new)
                 .entry(t.source_state)
@@ -63,20 +61,21 @@ where
                 .push(t);
         }
 
-        for q in q_inter.values() {
-            match root_weights.get(q) {
-                Some(pr_q) => root_pr.push(*pr_q),
-                None => root_pr.push(LogDomain::zero()),
+        let mut root_weights: Vec<LogDomain<f64>> = Vec::new();
+        for q in q_integeriser.values() {
+            match root_weight_map.get(q) {
+                Some(pr_q) => root_weights.push(*pr_q),
+                None => root_weights.push(LogDomain::zero()),
             }
         }
 
         PTA {
-            q_integeriser: q_inter,
-            t_integeriser: t_inter,
-            sigma: sigma,
-            number_states: root_pr.len(),
-            root_weights: root_pr,
-            transitions: transition_map,
+            q_integeriser,
+            t_integeriser,
+            sigma,
+            number_states: root_weights.len(),
+            root_weights,
+            transitions,
         }
     }
 
@@ -156,6 +155,7 @@ where
         for (s, rank) in &self.sigma {
             let mut t = Tree::new(s.clone());
             // TODO comment
+            //
             t.is_prefix = Some(rank != &0);
             let pp = self.potential_probability(&mut t, &mut known_trees);
             q.push(t, pp);
@@ -174,7 +174,7 @@ where
             }
             // ξ ∉ T_Σ (contains variables, i.e., is a prefix-tree/context)
             else {
-                for (s, _) in &self.sigma {
+                for s in self.sigma.keys() {
                     let mut t_s = t.clone();
 
                     t_s.is_prefix = Some(t_s.extend(s, &self.sigma));
@@ -209,7 +209,7 @@ where
             .values()
             .flat_map(|h| {
                 h.values()
-                    .map(|t| t.clone())
+                    .cloned()
                     .collect::<Vec<Vec<Transition<usize, usize>>>>()
             })
             .flatten()
@@ -242,7 +242,7 @@ where
                     !explored_states.contains(&t.source_state)
                         && t.target_states
                             .iter()
-                            .map(|q| *q)
+                            .copied()
                             .collect::<HashSet<usize>>()
                             .is_subset(&explored_states)
                 })
@@ -257,7 +257,7 @@ where
                 for t in transitions.iter().filter(|t| {
                     t.target_states
                         .iter()
-                        .map(|q| *q)
+                        .copied()
                         .collect::<HashSet<usize>>()
                         .is_subset(&explored_states)
                         && t.source_state == *q
@@ -326,9 +326,9 @@ where
         let mut ret: String = String::new();
         for (q, p) in self.root_weights.iter().enumerate() {
             if p != &LogDomain::zero() {
-                write!(
+                writeln!(
                     &mut ret,
-                    "root: {:?} # {}\n",
+                    "root: {:?} # {}",
                     self.q_integeriser.find_value(q).unwrap(),
                     p
                 )?;
@@ -338,9 +338,9 @@ where
         for s_hashmap in self.transitions.values() {
             for transitions in s_hashmap.values() {
                 for t in transitions {
-                    write!(
+                    writeln!(
                         &mut ret,
-                        "transition: {:?} -> {}({:?}) # {}\n",
+                        "transition: {:?} -> {}({:?}) # {}",
                         self.q_integeriser.find_value(t.source_state).unwrap(),
                         self.t_integeriser.find_value(t.symbol).unwrap(),
                         t.target_states
