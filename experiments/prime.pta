@@ -1,0 +1,11 @@
+% prime automaton for Psi = {2, 3}
+root: 0 # 1.0
+transition: 2 -> a() # 0.109
+transition: 5 -> a() # 0.109
+transition: 0 -> g(1) # 0.5
+transition: 0 -> g(3) # 0.5
+transition: 1 -> g(2) # 1.0
+transition: 2 -> g(1) # 0.891
+transition: 3 -> g(4) # 1.0
+transition: 4 -> g(5) # 1.0
+transition: 5 -> g(3) # 0.891

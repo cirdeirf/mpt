@@ -1,0 +1,10 @@
+root: 0 # 0.7
+root: 1 # 0.2
+root: 2 # 0.1
+transition: 1 -> a() # 0.5
+transition: 2 -> a() # 0.4
+transition: 1 -> b() # 0.2
+transition: 2 -> b() # 0.6
+transition: 0 -> s(1, 1) # 0.9
+transition: 0 -> s(2, 2) # 0.1
+transition: 1 -> s(1, 2) # 0.3
