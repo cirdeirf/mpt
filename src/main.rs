@@ -6,6 +6,7 @@ use std::fs;
 use std::time::Instant;
 
 fn main() {
+    // set command line arguments/options
     let matches = App::new("mpt")
         .version("0.1")
         .author("Pius Meinert <yrr+work@pm.me>")
@@ -18,40 +19,46 @@ fn main() {
         .arg(
             Arg::with_name("INPUT")
                 .default_value("experiments/default.pta")
-                .help("Sets the input file to use")
+                .help("Set the input file to use")
                 .required(true)
                 .index(1),
         )
         .arg(
             Arg::with_name("verbose")
                 .short("v")
+                .long("verbose")
                 .help("Print the PTA (root weight vector and transitions)"),
         )
         .arg(
             Arg::with_name("best_parse")
                 .short("b")
                 .long("best-parse")
-                .help("foo"),
+                .help("Calculate the tree with the best parse (Figure 3, Maletti and Satta, 2009)"),
         )
         .get_matches();
 
+    // read input file and parse input to pta
     let input = fs::read_to_string(matches.value_of("INPUT").unwrap())
         .expect("Could not read input file");
     let pta: PTA<String, String> = input.parse().unwrap();
 
+    // print the input pta (root weight vector and transitions)
     if matches.is_present("verbose") {
         println!("{}", pta);
     }
 
     let start_time = Instant::now();
 
+    // calculate and output the best parse/most probable tree
     if matches.is_present("best_parse") {
         let best_parse = pta.best_parse();
-        println!("{}\t{}", best_parse.1, best_parse.0);
+        println!("best parse:\t {}", best_parse.0);
+        println!("probability:\t {}", best_parse.1);
     } else {
         let mpt = pta.most_probable_tree();
-        println!("{}\t{}", mpt.1, mpt.0);
+        println!("mpt:\t\t {}", mpt.0);
+        println!("probability:\t {}", mpt.1);
     }
 
-    println!("time: {:?}", start_time.elapsed());
+    println!("time:\t\t {:?}", start_time.elapsed());
 }

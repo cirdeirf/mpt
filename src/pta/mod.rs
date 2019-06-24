@@ -319,8 +319,8 @@ where
 
 impl<Q, T> Display for PTA<Q, T>
 where
-    Q: Debug + Eq + Hash + Clone,
-    T: Display + Eq + Hash + Clone,
+    Q: Eq + Hash + Clone + Display + Debug,
+    T: Eq + Hash + Clone + Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut ret: String = String::new();
@@ -328,7 +328,7 @@ where
             if p != &LogDomain::zero() {
                 writeln!(
                     &mut ret,
-                    "root: {:?} # {}",
+                    "root: {} # {}",
                     self.q_integeriser.find_value(q).unwrap(),
                     p
                 )?;
@@ -338,15 +338,26 @@ where
         for s_hashmap in self.transitions.values() {
             for transitions in s_hashmap.values() {
                 for t in transitions {
+                    let mut target_states_str = String::new();
+                    for q in &t.target_states {
+                        target_states_str.push_str(
+                            &self
+                                .q_integeriser
+                                .find_value(*q)
+                                .unwrap()
+                                .to_string(),
+                        );
+                        target_states_str.push_str(", ");
+                    }
+                    target_states_str.pop();
+                    target_states_str.pop();
+
                     writeln!(
                         &mut ret,
-                        "transition: {:?} -> {}({:?}) # {}",
+                        "transition: {} -> {}({}) # {}",
                         self.q_integeriser.find_value(t.source_state).unwrap(),
                         self.t_integeriser.find_value(t.symbol).unwrap(),
-                        t.target_states
-                            .iter()
-                            .map(|q| self.q_integeriser.find_value(*q).unwrap())
-                            .collect::<Vec<&Q>>(),
+                        target_states_str,
                         t.probability,
                     )?;
                 }
