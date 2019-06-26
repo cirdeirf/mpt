@@ -5,16 +5,14 @@ use nom::{
     take_while, IResult,
 };
 use std::collections::HashMap;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::str::{from_utf8, FromStr};
 
 impl<Q, T> FromStr for PTA<Q, T>
 where
-    Q: Eq + Hash + Clone + FromStr + Debug,
-    Q::Err: Debug,
-    T: Eq + Hash + Clone + FromStr + Debug + Display,
-    T::Err: Debug,
+    Q: Eq + Hash + Clone + FromStr,
+    T: Eq + Hash + Clone + FromStr,
 {
     type Err = String;
 
@@ -28,8 +26,9 @@ where
                     Ok((_, (q, w))) => {
                         if root_pr.insert(q, w).is_some() {
                             return Err(format!(
-                                "State has multiple root probabilities assigned: {}",
-                                    l
+                                "State has multiple root probabilities \
+                                 assigned: {}",
+                                l
                             ));
                         };
                     }
@@ -47,7 +46,7 @@ where
         }
         match (root_pr, transitions) {
             (ref r, ref tr) if r.is_empty() || tr.is_empty() => Err(
-                "Incomplete pta definition (root weights and transitions are\
+                "Incomplete pta definition (root weights and transitions are \
                  necessary)"
                     .to_string(),
             ),
@@ -59,9 +58,7 @@ where
 impl<Q, T> FromStr for Transition<Q, T>
 where
     Q: FromStr,
-    Q::Err: Debug,
     T: FromStr,
-    T::Err: Debug,
 {
     type Err = String;
 
@@ -73,12 +70,12 @@ where
     }
 }
 
+/// Parses a transition.
+/// A transition has to be of the form `transition: q0 -> NP(q1, q2)`.
 fn parse_transition<Q, T>(input: &[u8]) -> IResult<&[u8], Transition<Q, T>>
 where
     Q: FromStr,
-    Q::Err: Debug,
     T: FromStr,
-    T::Err: Debug,
 {
     do_parse!(
         input,
@@ -109,12 +106,15 @@ where
 /// Parses a token (i.e. a terminal symbol or a non-terminal symbol).
 /// A *token* can be of one of the following two forms:
 ///
-/// * It is a string containing neither of the symbols `'"'`, `' '`, `'-'`, `'→'`, `','`, `';'`, `')'`, `']'`, `'%'`.
-/// * It is delimited by the symbol `'"'` on both sides and each occurrence of `'\\'` or `'"'` inside the delimiters is escaped.
-pub fn parse_token<A>(input: &[u8]) -> IResult<&[u8], A>
+/// * It is a string containing neither of the symbols
+/// `'"'`, `' '`, `'-'`, `'→'`, `','`, `';'`, `')'`, `']'`, `'%'`.
+/// * It is delimited by the symbol `'"'` on both sides
+/// and each occurrence of `'\\'` or `'"'` inside the delimiters is escaped.
+///
+/// ([rustomata](https://github.com/tud-fop/rustomata)/src/util/parsing.rs)
+fn parse_token<A>(input: &[u8]) -> IResult<&[u8], A>
 where
     A: FromStr,
-    A::Err: Debug,
 {
     named!(
         parse_token_s<&str>,
@@ -136,9 +136,13 @@ where
     )
 }
 
-/// Parses the `input` into a `Vec<A>` given an `inner_parser` for type `A`, an `opening` delimiter, a `closing` delimiter, and a `separator`.
-/// The `inner_parser` must not consume the `separator`s or the `closing` delimiter of the given `input`.
-pub fn parse_vec<'a, A, P>(
+/// Parses the `input` into a `Vec<A>` given an `inner_parser` for type `A`, an
+/// `opening` delimiter, a `closing` delimiter, and a `separator`.
+/// The `inner_parser` must not consume the `separator`s or the `closing`
+/// delimiter of the given `input`.
+///
+/// ([rustomata](https://github.com/tud-fop/rustomata)/src/util/parsing.rs)
+fn parse_vec<'a, A, P>(
     input: &'a [u8],
     inner_parser: P,
     opening: &str,
@@ -165,6 +169,8 @@ where
     )
 }
 
+/// Parses a weight annotation, i.e., a single `#` followed by a floating point
+/// number (e.g. `# 0.42`).
 fn parse_weight<W>(input: &[u8]) -> IResult<&[u8], W>
 where
     W: FromStr,
@@ -184,14 +190,14 @@ where
     )
 }
 
-/// TODO mention rustomata
-/// Parses a string of the form `finals: [...]` as a vector of final symbols of type `I`.
-pub fn parse_root_pr<Q, W>(input: &[u8]) -> IResult<&[u8], (Q, W)>
+/// Parses a string of the form `root: q0 # 0.43`.
+///
+/// ([rustomata](https://github.com/tud-fop/rustomata)/src/util/parsing.rs)
+fn parse_root_pr<Q, W>(input: &[u8]) -> IResult<&[u8], (Q, W)>
 where
     W: FromStr,
     W::Err: Debug,
     Q: FromStr,
-    Q::Err: Debug,
 {
     do_parse!(
         input,
@@ -208,6 +214,8 @@ where
 }
 
 /// Consumes any string that begins with the character `%`.
-pub fn parse_comment(input: &[u8]) -> IResult<&[u8], ()> {
+///
+/// ([rustomata](https://github.com/tud-fop/rustomata)/src/util/parsing.rs)
+fn parse_comment(input: &[u8]) -> IResult<&[u8], ()> {
     do_parse!(input, tag!("%") >> take_while!(|_| true) >> (()))
 }

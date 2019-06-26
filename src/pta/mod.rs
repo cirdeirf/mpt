@@ -8,47 +8,62 @@ use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
-use std::fmt::{self, Debug, Display, Write};
+use std::fmt::{self, Display, Write};
 use std::hash::Hash;
-use transition::{Integerisable2, Transition};
+use transition::{Integerisable, Transition};
 use tree::Tree;
 
+/// A probabilistic tree automaton A = (Q, Σ, μ, ν).
 pub struct PTA<Q, T>
 where
-    Q: Eq + Hash,
-    T: Eq + Hash,
+    Q: Eq + Hash, // states (Q)
+    T: Eq + Hash, // symbols (Σ)
 {
+    /// maps states (Q) to integers (usize) und vice versa
     q_integeriser: HashIntegeriser<Q>,
+    /// maps symbols (T) to integers (usize) und vice versa
     t_integeriser: HashIntegeriser<T>,
+    /// ranked alphabet Σ of tree symbols and their corresponding rank
     sigma: HashMap<T, usize>,
+    /// number of states/size of the automaton |Q|
     number_states: usize,
+    /// root weights ν: Q → [0, 1] represented as a list of probabilities
     root_weights: Vec<LogDomain<f64>>,
+    /// transitions μ represented as mapping: T → Q → Transition<Q, T>
     transitions: HashMap<usize, HashMap<usize, Vec<Transition<usize, usize>>>>,
 }
 
 impl<Q, T> PTA<Q, T>
 where
-    Q: Eq + Hash + Clone + Debug,
-    T: Eq + Hash + Clone + Debug + Display,
+    Q: Eq + Hash + Clone,
+    T: Eq + Hash + Clone,
 {
+    /// Instantiates a new PTA from all non-null root weights and a list of
+    /// transitions.
+    /// TODO consistency check
     fn new(
         root_weight_map: HashMap<Q, LogDomain<f64>>,
         transitions_vec: Vec<Transition<Q, T>>,
     ) -> PTA<Q, T> {
         let mut q_integeriser = HashIntegeriser::new();
         let mut t_integeriser = HashIntegeriser::new();
-
         let mut sigma = HashMap::new();
+        let mut root_weights: Vec<LogDomain<f64>> = Vec::new();
+        let mut transitions: HashMap<
+            usize,
+            HashMap<usize, Vec<Transition<usize, usize>>>,
+        > = HashMap::new();
+
+        // construct the ranked alphabet by iterating over all transitions
+        // the rank for a symbol σ is determined by the number of target states
+        // in a transition for σ
         for t in &transitions_vec {
             sigma
                 .entry(t.symbol.clone())
                 .or_insert_with(|| t.target_states.len());
         }
 
-        let mut transitions: HashMap<
-            usize,
-            HashMap<usize, Vec<Transition<usize, usize>>>,
-        > = HashMap::new();
+        // fill the hashmap of transitions and integerise states and symbols
         for t in transitions_vec
             .into_iter()
             .map(|t| t.integerise(&mut q_integeriser, &mut t_integeriser))
@@ -61,7 +76,8 @@ where
                 .push(t);
         }
 
-        let mut root_weights: Vec<LogDomain<f64>> = Vec::new();
+        // fill the root weight vector
+        // (states not mentioned are assumed to have a null probability)
         for q in q_integeriser.values() {
             match root_weight_map.get(q) {
                 Some(pr_q) => root_weights.push(*pr_q),
@@ -79,27 +95,37 @@ where
         }
     }
 
+    /// Recursively computes the cumulative probability for all runs on ξ with
+    /// the same state at the root position, i.e.,
+    /// ∀ q ∈ Q : ∑_{κ ∈ R(ξ) ∶ κ(ε) = q} Pr(κ).
     fn probability_rec(
         &self,
         xi: &mut Tree<T>,
         mut known_trees: &mut HashSet<Tree<T>>,
     ) -> Vec<LogDomain<f64>> {
+        // get probabilities for tree xi if they have been calculated before
         if known_trees.contains(&xi) {
             known_trees.get(&xi).unwrap().run.clone()
         } else {
+            // gather all transitions that have xi.root as a symbol
             let transitions = self
                 .transitions
                 .get(&self.t_integeriser.find_key(&xi.root).unwrap())
                 .unwrap();
 
             let mut ret: Vec<LogDomain<f64>> = Vec::new();
+            // ∀ q ∈ Q (go from 0 to |Q| because states have been integerised)
             for q in 0..self.number_states {
                 let mut p_q = LogDomain::zero();
-
+                // check if there are any transitions with q as source state
                 if let Some(v) = transitions.get(&q) {
+                    // ∑_{κ ∈ R(ξ)∶ κ(ε) = q} Pr(κ)
                     for t in v {
+                        // μ_σ(κ(1), ..., κ(k)) ⋅ ...
                         let mut p_t = t.probability;
+                        // wt(κ|_1) ⋅ ... ⋅ wt(κ|_k)
                         for (i, q_i) in t.target_states.iter().enumerate() {
+                            // ξ|_i ∈ X implies wt(κ|_i) = 1
                             if let Some(t_i) = xi.children.get_mut(i) {
                                 p_t *= self
                                     .probability_rec(t_i, &mut known_trees)
@@ -111,13 +137,36 @@ where
                 }
                 ret.push(p_q);
             }
+            // save probabilities in the tree xi
             xi.run = ret.clone();
             known_trees.insert(xi.clone());
             ret
         }
     }
 
-    fn potential_probability(
+    /// Calculates the probability of a (prefix-)tree ξ ∈ T_Σ(X).
+    /// Base case for the recursive computation done in fn probability_rec and
+    /// applies root weights.
+    fn probability(
+        &self,
+        xi: &mut Tree<T>,
+        mut known_trees: &mut HashSet<Tree<T>>,
+    ) -> LogDomain<f64> {
+        // multiply the probability of runs ending in a state q by the
+        // probability of a run ending in that state (root weight)
+        self.probability_rec(xi, &mut known_trees)
+            .iter()
+            .zip(&self.root_weights)
+            .map(|(&p_q, &root_q)| p_q * root_q)
+            .sum()
+    }
+
+    /// Compute the potential probability PP(ξ) = min(|Q|²/height(ξ), Pr(ξ)).
+    /// This is supposed to take the bound of Theorem X (TODO) into account
+    /// similar to what is done in Definition 2 by de la Higuera and Oncina 2013
+    /// [Definition 2, dlHO13b]. Currently not in use since the bound is not
+    /// tight enough to affect the outcome.
+    fn _potential_probability(
         &self,
         xi: &mut Tree<T>,
         mut known_trees: &mut HashSet<Tree<T>>,
@@ -125,71 +174,73 @@ where
         cmp::min(
             self.probability(xi, &mut known_trees),
             LogDomain::new(
-                self.number_states.pow(2) as f64 / xi.get_height() as f64,
+                self.number_states.pow(2) as f64 / xi._get_height() as f64,
             )
             .unwrap(),
         )
     }
 
-    fn probability(
-        &self,
-        xi: &mut Tree<T>,
-        mut known_trees: &mut HashSet<Tree<T>>,
-    ) -> LogDomain<f64> {
-        let pr = self
-            .probability_rec(xi, &mut known_trees)
-            .iter()
-            .zip(&self.root_weights)
-            .map(|(&p_q, &root_q)| p_q * root_q)
-            .sum();
-        xi.probability = pr;
-        pr
-    }
-
+    /// Calculates the most probable tree.
+    /// The algorithm, corresponding analysis and evaluation can be found in
+    /// Section X (TODO) of my master's thesis. This is based on an algorithm
+    /// for probabilistic finite state automaton provided by Algorithm 1 in
+    /// ["Computing the Most Probable String with a Probabilistic Finite State
+    /// Machine" by de la Higuera and Oncina,
+    /// 2013](https://www.aclweb.org/anthology/W13-1801) [dlHO13b, Algorithm 1].
     pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>) {
-        let mut current_prop = LogDomain::zero();
-        let mut current_best;
-        let mut known_trees = HashSet::new();
-
+        // priority queue of explored trees ξ ∈ T_Σ(X), sorted w.r.t. Pr(ξ)
         let mut q = PriorityQueue::new();
-        for (s, rank) in &self.sigma {
-            let mut t = Tree::new(s.clone());
-            // TODO comment
-            //
-            t.is_prefix = Some(rank != &0);
-            let pp = self.potential_probability(&mut t, &mut known_trees);
-            q.push(t, pp);
-        }
+        // set of trees whose probability has already been calculated once
+        let mut known_trees = HashSet::new();
+        // the best complete tree ξ ∈ T_Σ (no variables) and its Pr in the queue
+        // (this is to prevent exploring prefix trees with a worse Pr than the
+        // current best because extending a tree never improves the probability)
+        let mut current_best;
+        let mut current_prop = LogDomain::zero();
 
+        // initially fill the queue with trees consisting of one symbol since we
+        // cannot start with an empty tree
+        for (sigma, rank) in &self.sigma {
+            let mut xi = Tree::new(sigma.clone());
+            // since sigma has a rank of 0, xi is a complete tree/no prefix-tree
+            xi.is_prefix = rank != &0;
+            let pr = self.probability(&mut xi, &mut known_trees);
+            q.push(xi, pr);
+        }
+        // initialise with an arbitrary value (save the overhead of looking for
+        // the current best complete tree consiting of one symbol)
         current_best = q.peek().unwrap().0.clone();
 
         while !q.is_empty() {
-            let (t, pp) = q.pop().unwrap();
+            let (xi, pr) = q.pop().unwrap();
 
             // ξ ∈ T_Σ
-            if !t.is_prefix.unwrap() {
-                current_best = t;
-                current_prop = pp;
+            if !xi.is_prefix {
+                current_best = xi;
+                current_prop = pr;
                 break;
             }
             // ξ ∉ T_Σ (contains variables, i.e., is a prefix-tree/context)
             else {
+                // extend ξ with every σ ∈ Σ
                 for s in self.sigma.keys() {
-                    let mut t_s = t.clone();
+                    let mut xi_s = xi.clone();
 
-                    t_s.is_prefix = Some(t_s.extend(s, &self.sigma));
-                    let pp_t_s =
-                        self.potential_probability(&mut t_s, &mut known_trees);
+                    // replace the first occurence (breadth first) of x in ξ
+                    // with σ and return wether it still contains any vaiables x
+                    xi_s.is_prefix = xi_s.extend(s, &self.sigma);
+                    let pr_xi_s = self.probability(&mut xi_s, &mut known_trees);
 
                     // do not add (prefix-)trees to the queue that are worse
-                    // than the current best complete tree
-                    if pp_t_s > current_prop {
+                    // than the current best complete tree (extending trees can
+                    // only result in the same or worse probability)
+                    if pr_xi_s > current_prop {
                         // ξ ∈ T_Σ (t_s complete + better than the current best)
-                        if !t_s.is_prefix.unwrap() {
-                            current_best = t_s.clone();
-                            current_prop = pp_t_s;
+                        if !xi_s.is_prefix {
+                            current_best = xi_s.clone();
+                            current_prop = pr_xi_s;
                         }
-                        q.push(t_s, pp_t_s);
+                        q.push(xi_s, pr_xi_s);
                     }
                 }
             }
@@ -200,8 +251,9 @@ where
     /// Dertermines the best/most probable parse.
     /// Return the corrresponding tree and the run's probability.
     /// This implementation is based on the BestParse algorithm depicted in
-    /// Figure 3 of "Parsing Algorithms based on Tree Automata" by Maletti and
-    /// Satta, 2009 [MS09, Figure 3] [MS09, Figure 3]
+    /// Figure 3 of ["Parsing Algorithms based on Tree Automata" by Maletti and
+    /// Satta, 2009](https://www.aclweb.org/anthology/W09-3801)
+    /// [MS09, Figure 3].
     pub fn best_parse(&self) -> (Tree<T>, LogDomain<f64>) {
         // flatten HashMaps, gather all transitions in one vector
         let transitions: Vec<Transition<usize, usize>> = self
@@ -215,7 +267,7 @@ where
             .flatten()
             .collect();
 
-        // get all root states (with non-null root weight)
+        // get all root states (states with non-null root weight)
         let root_states: HashSet<usize> = self
             .root_weights
             .iter()
@@ -242,7 +294,7 @@ where
                     !explored_states.contains(&t.source_state)
                         && t.target_states
                             .iter()
-                            .copied()
+                            .cloned()
                             .collect::<HashSet<usize>>()
                             .is_subset(&explored_states)
                 })
@@ -257,7 +309,7 @@ where
                 for t in transitions.iter().filter(|t| {
                     t.target_states
                         .iter()
-                        .copied()
+                        .cloned()
                         .collect::<HashSet<usize>>()
                         .is_subset(&explored_states)
                         && t.source_state == *q
@@ -317,13 +369,15 @@ where
     }
 }
 
+// Pretty print of PTA
 impl<Q, T> Display for PTA<Q, T>
 where
-    Q: Eq + Hash + Clone + Display + Debug,
+    Q: Eq + Hash + Clone + Display,
     T: Eq + Hash + Clone + Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut ret: String = String::new();
+        // format non-null root weights
         for (q, p) in self.root_weights.iter().enumerate() {
             if p != &LogDomain::zero() {
                 writeln!(
@@ -335,9 +389,11 @@ where
             }
         }
 
+        // format transitions (with non-null transitions)
         for s_hashmap in self.transitions.values() {
             for transitions in s_hashmap.values() {
                 for t in transitions {
+                    // get a pretty string representation of target states
                     let mut target_states_str = String::new();
                     for q in &t.target_states {
                         target_states_str.push_str(
@@ -363,7 +419,6 @@ where
                 }
             }
         }
-
         write!(f, "{}", ret)
     }
 }
@@ -404,7 +459,7 @@ mod tests {
                           transition: 1 -> s(1, 2) # 0.3";
         let pta: PTA<usize, char> = pta_string.parse().unwrap();
         let mut xi: Tree<char> = "(s (a) (b))".parse().unwrap();
-        xi.is_prefix = Some(true);
+        xi.is_prefix = true;
         assert_eq!(
             pta.probability(&mut xi, &mut HashSet::new()),
             LogDomain::new(0.0978).unwrap()
@@ -426,9 +481,9 @@ mod tests {
                           transition: 1 -> s(1, 2) # 0.3";
         let pta: PTA<usize, char> = pta_string.parse().unwrap();
         let mut xi: Tree<char> = "(s (a) (s))".parse().unwrap();
-        xi.is_prefix = Some(true);
+        xi.is_prefix = true;
         assert_eq!(
-            pta.potential_probability(&mut xi, &mut HashSet::new(),),
+            pta._potential_probability(&mut xi, &mut HashSet::new(),),
             LogDomain::new(0.0945).unwrap()
         );
     }

@@ -4,23 +4,27 @@ use nom::{
     alt, char, do_parse, many0, many1, named, separated_nonempty_list, tag,
     take_until_either, Err,
 };
-use num_traits::Zero;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
+/// A tree ξ ∈ T_Σ(X) for a ranked alphabet Σ and a set of variables X.
 #[derive(Debug, Eq, Clone)]
 pub struct Tree<A> {
     pub root: A,
     pub children: Vec<Tree<A>>,
+    /// each entry represents the probability of recognising this tree and
+    /// ending up in the corresponding state, i.e.,
+    /// ∀ q ∈ Q : ∑_{κ ∈ R(ξ) ∶ κ(ε) = q} Pr(κ).
     pub run: Vec<LogDomain<f64>>,
-    pub probability: LogDomain<f64>,
-    pub is_prefix: Option<bool>,
+    /// ξ contains variables, i.e., ξ ∉ T_Σ
+    pub is_prefix: bool,
 }
 
-/// `impl` of `PartialEq` that ignores the `weight` (to conform to the `impl` of `Hash`)
+/// `impl` of `PartialEq` that ignores everything except `root` and `children`
+/// (to conform to the `impl` of `Hash`).
 impl<A> PartialEq for Tree<A>
 where
     A: PartialEq,
@@ -30,6 +34,9 @@ where
     }
 }
 
+/// `impl` of `Hash` that ignores everything except `root` and `children`
+/// because floats like f64 are not hashable. This has to be done in order to
+/// ensure that each tree's run probabilities are only calculated once.
 impl<A> Hash for Tree<A>
 where
     A: Hash,
@@ -44,16 +51,20 @@ impl<A> Tree<A>
 where
     A: Eq + Hash + Clone,
 {
-    pub fn new(root_symbol: A) -> Tree<A> {
+    /// Instantiates a new Tree with a symbol at the root position and no
+    /// children. It is assumed to be a prefix (normally this will be set
+    /// immediately after instantiation if necessary)
+    pub fn new(root: A) -> Tree<A> {
         Tree {
-            root: root_symbol,
+            root,
             children: Vec::new(),
             run: Vec::new(),
-            is_prefix: None,
-            probability: LogDomain::zero(),
+            is_prefix: true,
         }
     }
 
+    /// Instantiates a new Tree with a symbol at the root position and a list of
+    /// children.
     pub fn new_with_children(
         root_symbol: A,
         children: Vec<Tree<A>>,
@@ -63,47 +74,57 @@ where
         tree
     }
 
-    pub fn get_height(&self) -> usize {
+    /// Determines the height of the tree, i.e., the amount of nodes on the
+    /// longest path from the root to a leaf.
+    pub fn _get_height(&self) -> usize {
         if self.children.is_empty() {
             1
         } else {
             self.children
                 .iter()
-                .map(|t| t.get_height() + 1)
+                .map(|t| t._get_height() + 1)
                 .max()
                 .unwrap()
         }
     }
 
-    pub fn extend(&mut self, symbol: &A, sigma: &HashMap<A, usize>) -> bool {
+    /// Searches for the first variable in a breadth-first manner and replaces
+    /// it with the given symbol σ. Returns true if the resulting tree remains a
+    /// prefix (still contains variables) and false otherwise (ξ ∈ T_Σ).
+    pub fn extend(&mut self, s: &A, sigma: &HashMap<A, usize>) -> bool {
         let mut prefix = false;
         let mut extended = false;
+        let mut xi_stack = Vec::new();
 
-        let mut t_stack = Vec::new();
-        t_stack.push(self);
-
-        while !t_stack.is_empty() {
-            let t = t_stack.pop().unwrap();
-            if t.children.len() < *sigma.get(&t.root).unwrap() {
+        xi_stack.push(self);
+        while !xi_stack.is_empty() {
+            let xi = xi_stack.pop().unwrap();
+            // there is at least one direct child such that ξ(i) ∈ X
+            if xi.children.len() < *sigma.get(&xi.root).unwrap() {
+                // in case ξ already has been extended and another variable is
+                // found we know that ξ ∉ T_Σ
                 if extended {
                     prefix = true;
                     break;
                 } else {
-                    t.children.push(Tree::new((*symbol).clone()));
-                    t_stack.push(t);
+                    xi.children.push(Tree::new((*s).clone()));
+                    xi_stack.push(xi);
                 }
-                extended = !extended;
+                // only extend once
+                extended = true;
             } else {
-                for t_i in &mut t.children {
-                    t_stack.push(t_i);
+                // look at all children
+                for xi_i in &mut xi.children {
+                    xi_stack.push(xi_i);
                 }
             }
         }
         prefix
     }
 
-    // TODO use generics/shorten
-    pub fn from_sexp(sexp: SExp) -> Tree<char> {
+    /// Creates a tree from an S-expression.
+    /// (Credit to Felix Wittwer)
+    fn from_sexp(sexp: SExp) -> Tree<char> {
         let mut content = Vec::new();
         if let SExp::List(a) = sexp {
             content = a.to_vec();
@@ -122,12 +143,12 @@ where
             root,
             children,
             run: Vec::new(),
-            is_prefix: None,
-            probability: LogDomain::zero(),
+            is_prefix: true,
         }
     }
 }
 
+/// Pretty print for trees.
 impl<A> fmt::Display for Tree<A>
 where
     A: fmt::Display,
@@ -160,7 +181,8 @@ pub enum SExp {
     List(Vec<SExp>),
 }
 
-// TODO malformed strings, etc., credit to felix
+/// Parse an S-expression.
+/// (Credit to Felix Wittwer)
 impl FromStr for SExp {
     type Err = String;
 
@@ -169,18 +191,23 @@ impl FromStr for SExp {
 
         named!(list<&[u8],SExp>,
             do_parse!(
-                many0!(tag!(" ")) >>
-                char!('(') >>
-                many0!(tag!(" ")) >>
-                conts: separated_nonempty_list!(many1!(tag!(" ")), sxpr) >> // originally: take_while!(is_space)
-                many0!(tag!(" ")) >>
-                char!(')') >>
+                   many0!(tag!(" "))
+                >> char!('(')
+                >> many0!(tag!(" "))
+                >> conts: separated_nonempty_list!(many1!(tag!(" ")), sxpr)
+                >> many0!(tag!(" "))
+                >> char!(')')
 
-                (SExp::List(conts))
+                >> (SExp::List(conts))
             )
         );
 
-        named!(atom<&[u8],SExp>, do_parse!(aa: take_until_either!(" )") >> (SExp::Atom(String::from_utf8(aa.to_vec()).unwrap()))));
+        named!(atom<&[u8],SExp>,
+            do_parse!(
+                   aa: take_until_either!(" )")
+                >> (SExp::Atom(String::from_utf8(aa.to_vec()).unwrap()))
+            )
+        );
 
         named!(sxpr<&[u8],SExp>, alt!(list | atom));
 
@@ -189,12 +216,14 @@ impl FromStr for SExp {
             #[cold]
             Err(e) => {
                 match &e {
-                    Err::Incomplete(_) => {
-                        eprintln!("[Error] Parsing did not succeed: Incomplete Input Sequence!")
-                    }
+                    Err::Incomplete(_) => eprintln!(
+                        "[Error] Parsing did not succeed: \
+                         Incomplete Input Sequence!"
+                    ),
                     Err::Error(ref rest) | Err::Failure(ref rest) => {
                         eprintln!(
-                            "[Error] Could not parse input string due to error: {}",
+                            "[Error] Could not parse input string due to \
+                             error: {}",
                             e.description()
                         );
                         let Context::Code(c, _) = rest;

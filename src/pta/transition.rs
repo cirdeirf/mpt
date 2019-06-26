@@ -2,6 +2,7 @@ use integeriser::{HashIntegeriser, Integeriser};
 use log_domain::LogDomain;
 use std::hash::Hash;
 
+/// A transition for a probabilistic tree automaton.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Transition<Q, T> {
     pub source_state: Q,
@@ -10,7 +11,12 @@ pub struct Transition<Q, T> {
     pub probability: LogDomain<f64>,
 }
 
-impl<Q, T> Integerisable2 for Transition<Q, T>
+/// Trait for mapping states and symbols to integers and vice versa for easier
+/// processing ([rust-integeriser](https://github.com/tud-fop/rust-integeriser).
+/// This implementation is adapted from the Integerisable implementation for
+/// transitions in [rustomata](https://github.com/tud-fop/rustomata)
+/// (rustomata/src/recognisable/transition.rs).
+impl<Q, T> Integerisable for Transition<Q, T>
 where
     Q: Eq + Clone + Hash,
     T: Eq + Clone + Hash,
@@ -57,31 +63,17 @@ where
     }
 }
 
-pub trait Integerisable1
-where
-    Self::I: Integeriser,
-{
-    type AInt;
-    /// type of the integerised self
-    type I;
-    /// type of the integeriser
-
-    fn integerise(&self, integeriser: &mut Self::I) -> Self::AInt;
-
-    fn un_integerise(_: &Self::AInt, integeriser: &Self::I) -> Self;
-}
-
-pub trait Integerisable2
+pub trait Integerisable
 where
     Self::I1: Integeriser,
     Self::I2: Integeriser,
 {
-    type AInt;
     /// type of the integerised self
-    type I1;
+    type AInt;
     /// type of the first integeriser
-    type I2;
+    type I1;
     /// type of the second integeriser
+    type I2;
 
     fn integerise(
         &self,

@@ -13,8 +13,8 @@ fn main() {
         .about(
             "Most probable tree and best parse algorithms for probabilistic \
              tree automata (pta).\n\
-             Implementation for my master's thesis: “The Problem of Computing \
-             the Most Probable Tree of a Probabilistic Tree Automaton”.",
+             Implementation for my master's thesis: \"The Problem of Computing \
+             the Most Probable Tree of a Probabilistic Tree Automaton\".",
         )
         .arg(
             Arg::with_name("INPUT")
