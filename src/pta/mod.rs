@@ -1,3 +1,7 @@
+//! Module for the probabilistic tree automaton, its transitions and trees that
+//! can be recognised by a pta. The most probable tree and best parse algorithms
+//! are part of the pta implementation.
+
 mod from_str;
 mod transition;
 pub mod tree;

@@ -1,3 +1,15 @@
+//! This is the implementation for my master's thesis "The Problem of Computing
+//! the Most Probable Tree of a Probabilistic Tree Automaton". It includes an
+//! algorithm for calculating the most probable tree (mpt) and an implementation
+//! of the best parse algorithm presented in "Parsing Algorithms based on Tree
+//! Automata" by Andreas Maletti and Giorgio Satta, 2009.
+//!
+//! # Setup
+//!
+//! # Example
+//!
+//! # Experiments
+
 mod pta;
 
 use clap::{App, Arg};
@@ -14,7 +26,8 @@ fn main() {
             "Most probable tree and best parse algorithms for probabilistic \
              tree automata (pta).\n\
              Implementation for my master's thesis: \"The Problem of Computing \
-             the Most Probable Tree of a Probabilistic Tree Automaton\".",
+             the Most Probable Tree of a Probabilistic Tree Automaton\". By \
+             default, the most probable tree algorithm is executed.",
         )
         .arg(
             Arg::with_name("INPUT")
