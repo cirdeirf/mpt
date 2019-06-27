@@ -13,6 +13,7 @@
 mod pta;
 
 use clap::{App, Arg};
+use pta::experiments;
 use pta::PTA;
 use std::fs;
 use std::time::Instant;
@@ -31,7 +32,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("INPUT")
-                .default_value("experiments/default.pta")
+                .default_value("experiments/pta/default.pta")
                 .help("Set the input file to use")
                 .required(true)
                 .index(1),
@@ -46,7 +47,17 @@ fn main() {
             Arg::with_name("best_parse")
                 .short("b")
                 .long("best-parse")
-                .help("Calculate the tree with the best parse (Figure 3, Maletti and Satta, 2009)"),
+                .help(
+                    "Calculate the tree with the best parse (Figure 3, \
+                     Maletti and Satta, 2009)",
+                ),
+        )
+        .arg(
+            Arg::with_name("experiments")
+                .short("e")
+                .long("experiments")
+                .conflicts_with_all(&["verbose", "best_parse"])
+                .help("foo"),
         )
         .get_matches();
 
@@ -67,11 +78,15 @@ fn main() {
         let best_parse = pta.best_parse();
         println!("best parse:\t {}", best_parse.0);
         println!("probability:\t {}", best_parse.1);
-    } else {
+    } else if !matches.is_present("experiments") {
         let mpt = pta.most_probable_tree();
         println!("mpt:\t\t {}", mpt.0);
         println!("probability:\t {}", mpt.1);
     }
 
-    println!("time:\t\t {:?}", start_time.elapsed());
+    if matches.is_present("experiments") {
+        experiments::generate(3, 2, vec!["a", "b", "c", "d", "e", "f"], "test");
+    } else {
+        println!("time:\t\t {:?}", start_time.elapsed());
+    }
 }

@@ -2,9 +2,10 @@
 //! can be recognised by a pta. The most probable tree and best parse algorithms
 //! are part of the pta implementation.
 
+pub mod experiments;
 mod from_str;
 mod transition;
-pub mod tree;
+mod tree;
 
 use integeriser::{HashIntegeriser, Integeriser};
 use log_domain::LogDomain;
