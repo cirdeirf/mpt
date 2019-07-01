@@ -13,8 +13,7 @@
 mod pta;
 
 use clap::{App, Arg};
-use pta::experiments;
-use pta::PTA;
+use pta::{experiments, PTA};
 use std::time::Instant;
 
 fn main() {
@@ -124,10 +123,14 @@ fn main() {
             println!("best parse:\t {}", best_parse.0);
             println!("probability:\t {}", best_parse.1);
         } else {
-            let mpt = pta.most_probable_tree();
-            println!("mpt:\t\t {}", mpt.0);
-            println!("probability:\t {}", mpt.1);
-            println!("insertions:\t {}", mpt.2);
+            match pta.most_probable_tree() {
+                Ok(mpt) => {
+                    println!("mpt:\t\t {}", mpt.0);
+                    println!("probability:\t {}", mpt.1);
+                    println!("insertions:\t {}", mpt.2);
+                }
+                Err(e) => panic!("{}", e),
+            }
         }
         println!("time:\t\t {:?}", start_time.elapsed());
     }

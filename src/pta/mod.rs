@@ -214,7 +214,9 @@ where
     /// ["Computing the Most Probable String with a Probabilistic Finite State
     /// Machine" by de la Higuera and Oncina,
     /// 2013](https://www.aclweb.org/anthology/W13-1801) [dlHO13b, Algorithm 1].
-    pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>, usize) {
+    pub fn most_probable_tree(
+        &self,
+    ) -> Result<(Tree<T>, LogDomain<f64>, usize), &str> {
         // priority queue of explored trees ξ ∈ T_Σ(X), sorted w.r.t. Pr(ξ)
         let mut q = PriorityQueue::new();
         let mut insertion_count = 0;
@@ -271,11 +273,17 @@ where
                         }
                         q.push(xi_s, pr_xi_s);
                         insertion_count += 1;
+                        if insertion_count > 1e+7 as usize {
+                            return Err(
+                                "Maximum number of insertions (10⁷) exceeded. \
+                                 Calculation of most probable tree aborted.",
+                            );
+                        }
                     }
                 }
             }
         }
-        (current_best, current_prop, insertion_count)
+        Ok((current_best, current_prop, insertion_count))
     }
 
     /// Dertermines the best/most probable parse.
