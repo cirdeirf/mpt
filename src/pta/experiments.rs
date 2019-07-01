@@ -116,7 +116,7 @@ pub fn generate(
     // (since the disired average rank is often unreachable, it suffices if it
     // is close enough)
     else if (average_rk - average_rank).abs() > 0.25 {
-        Err("Average rank goal not met.")
+        Err("Average rank constraint not met.")
     }
     // create the new pta and write it to file
     else {
@@ -194,7 +194,7 @@ fn write_to_file(
     ) {
         Ok(_) => println!(
             "Created a new pta with {} levels, multiplicity {}, \
-             a vocabulary size of {} and an average rank of {:2} at {}",
+             a vocabulary size of {} and an average rank of {:2} at {}\n",
             level,
             multiplicity,
             vocabulary_len,

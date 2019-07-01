@@ -15,9 +15,6 @@ mod pta;
 use clap::{App, Arg};
 use pta::experiments;
 use pta::PTA;
-use std::error::Error;
-use std::fs;
-use std::path::Path;
 use std::time::Instant;
 
 fn main() {
@@ -58,28 +55,17 @@ fn main() {
             Arg::with_name("generate")
                 .short("g")
                 .long("generate")
-                .conflicts_with_all(&["best_parse", "verbose"])
+                .conflicts_with_all(&["experiments", "best_parse", "verbose"])
+                .help("foo"),
+        )
+        .arg(
+            Arg::with_name("experiments")
+                .short("e")
+                .long("experiments")
+                .conflicts_with_all(&["generate", "best_parse", "verbose"])
                 .help("foo"),
         )
         .get_matches();
-
-    // read input file and parse input to pta
-    let input_str = &matches.value_of("INPUT").unwrap();
-    let input_path = Path::new(input_str);
-    let input = match fs::read_to_string(matches.value_of("INPUT").unwrap()) {
-        Ok(file) => file,
-        Err(e) => panic!(
-            "Could not read input file {}: {}.",
-            input_path.display(),
-            e.description()
-        ),
-    };
-    let pta: PTA<String, String> = input.parse().unwrap();
-
-    // print the input pta (root weight vector and transitions)
-    if matches.is_present("verbose") {
-        println!("{}", pta);
-    }
 
     // generate all test pta (with varying amount of level, multiplicity, number
     // of symbols and average rank)
@@ -87,20 +73,51 @@ fn main() {
         let mut tries = 0;
         // generate a tree with properties:
         // #level, multiplicity, #symbols, average rank +- 0.25
-        while let Err(e) = experiments::generate(3, 2, 3, 2.5, "test") {
-            println!("{} Trying again.", e);
-            tries += 1;
-            if tries > 20 {
-                println!(
+        for level in 3..6 {
+            for multiplicity in 2..4 {
+                for vocabulary_len in 2..7 {
+                    for average_rank in vec![1.0, 1.5, 2.0, 2.5, 3.0] {
+                        for _ in 0..1 {
+                            while let Err(e) = experiments::generate(
+                                level,
+                                multiplicity,
+                                vocabulary_len,
+                                average_rank,
+                                &format!(
+                                    "l{}_m{}_v{}_rk{}",
+                                    level,
+                                    multiplicity,
+                                    vocabulary_len,
+                                    average_rank.to_string().replace(".", ","),
+                                ),
+                            ) {
+                                println!("{} Trying again.", e);
+                                tries += 1;
+                                if tries > 20 {
+                                    panic!(
                     "Maximum number of tries exceeded. Adjust desired PTA \
                      parameters."
                 );
-                break;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+    } else if matches.is_present("experiments") {
+
     }
     // calculate and output the best parse/most probable tree
     else {
+        // read input file and parse input to pta
+        let pta: PTA<String, String> =
+            PTA::from_file(&matches.value_of("INPUT").unwrap());
+        // print the input pta (root weight vector and transitions)
+        if matches.is_present("verbose") {
+            println!("{}", pta);
+        }
+
         let start_time = Instant::now();
         if matches.is_present("best_parse") {
             let best_parse = pta.best_parse();

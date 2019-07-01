@@ -13,8 +13,12 @@ use num_traits::Zero;
 use priority_queue::PriorityQueue;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt::{self, Display, Write};
+use std::fs;
 use std::hash::Hash;
+use std::path::Path;
+use std::str::FromStr;
 use transition::{Integerisable, Transition};
 use tree::Tree;
 
@@ -98,6 +102,24 @@ where
             root_weights,
             transitions,
         }
+    }
+
+    /// Instantiate a new PTA from specifications given in a file.
+    pub fn from_file(filename: &str) -> PTA<Q, T>
+    where
+        Q: FromStr,
+        T: FromStr,
+    {
+        let path = Path::new(filename);
+        let pta_string = match fs::read_to_string(filename) {
+            Ok(file) => file,
+            Err(e) => panic!(
+                "Could not read pta file {}: {}.",
+                path.display(),
+                e.description()
+            ),
+        };
+        pta_string.parse().unwrap()
     }
 
     /// Recursively computes the cumulative probability for all runs on ξ with
