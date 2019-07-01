@@ -41,7 +41,7 @@ where
 impl<Q, T> PTA<Q, T>
 where
     Q: Eq + Hash + Clone,
-    T: Eq + Hash + Clone,
+    T: Eq + Hash + Clone + Display,
 {
     /// Instantiates a new PTA from all non-null root weights and a list of
     /// transitions.
@@ -192,9 +192,10 @@ where
     /// ["Computing the Most Probable String with a Probabilistic Finite State
     /// Machine" by de la Higuera and Oncina,
     /// 2013](https://www.aclweb.org/anthology/W13-1801) [dlHO13b, Algorithm 1].
-    pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>) {
+    pub fn most_probable_tree(&self) -> (Tree<T>, LogDomain<f64>, usize) {
         // priority queue of explored trees ξ ∈ T_Σ(X), sorted w.r.t. Pr(ξ)
         let mut q = PriorityQueue::new();
+        let mut insertion_count = 0;
         // set of trees whose probability has already been calculated once
         let mut known_trees = HashSet::new();
         // the best complete tree ξ ∈ T_Σ (no variables) and its Pr in the queue
@@ -211,6 +212,7 @@ where
             xi.is_prefix = rank != &0;
             let pr = self.probability(&mut xi, &mut known_trees);
             q.push(xi, pr);
+            insertion_count += 1;
         }
         // initialise with an arbitrary value (save the overhead of looking for
         // the current best complete tree consiting of one symbol)
@@ -246,11 +248,12 @@ where
                             current_prop = pr_xi_s;
                         }
                         q.push(xi_s, pr_xi_s);
+                        insertion_count += 1;
                     }
                 }
             }
         }
-        (current_best, current_prop)
+        (current_best, current_prop, insertion_count)
     }
 
     /// Dertermines the best/most probable parse.

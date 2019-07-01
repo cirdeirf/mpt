@@ -5,14 +5,14 @@ use nom::{
     take_while, IResult,
 };
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::str::{from_utf8, FromStr};
 
 impl<Q, T> FromStr for PTA<Q, T>
 where
     Q: Eq + Hash + Clone + FromStr,
-    T: Eq + Hash + Clone + FromStr,
+    T: Eq + Hash + Clone + FromStr + Display,
 {
     type Err = String;
 
