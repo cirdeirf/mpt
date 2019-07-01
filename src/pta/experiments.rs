@@ -194,7 +194,7 @@ fn write_to_file(
     ) {
         Ok(_) => println!(
             "Created a new pta with {} levels, multiplicity {}, \
-             a vocabulary size of {} and an average rank of {:2} at {}\n",
+             a vocabulary size of {} and an average rank of {:.2} at {}\n",
             level,
             multiplicity,
             vocabulary_len,

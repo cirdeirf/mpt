@@ -54,7 +54,7 @@ fn main() {
             Arg::with_name("generate")
                 .short("g")
                 .long("generate")
-                .conflicts_with_all(&["experiments", "best_parse", "verbose"])
+                .conflicts_with_all(&["experiments", "best_parse"])
                 .help("foo"),
         )
         .arg(
@@ -69,7 +69,6 @@ fn main() {
     // generate all test pta (with varying amount of level, multiplicity, number
     // of symbols and average rank)
     if matches.is_present("generate") {
-        let mut tries = 0;
         // generate a tree with properties:
         // #level, multiplicity, #symbols, average rank +- 0.25
         for level in 3..6 {
@@ -77,6 +76,7 @@ fn main() {
                 for vocabulary_len in 2..7 {
                     for average_rank in vec![1.0, 1.5, 2.0, 2.5, 3.0] {
                         for _ in 0..1 {
+                            let mut tries = 0;
                             while let Err(e) = experiments::generate(
                                 level,
                                 multiplicity,
@@ -90,12 +90,14 @@ fn main() {
                                     average_rank.to_string().replace(".", ","),
                                 ),
                             ) {
-                                println!("{} Trying again.", e);
+                                if matches.is_present("verbose") {
+                                    println!("{} Trying again.", e);
+                                }
                                 tries += 1;
-                                if tries > 20 {
+                                if tries > 2000 {
                                     panic!(
-                    "Maximum number of tries exceeded. Adjust desired PTA \
-                     parameters."
+                    "Maximum number of tries (2000) exceeded. Adjust desired \
+                    PTA parameters or try again."
                 );
                                 }
                             }
