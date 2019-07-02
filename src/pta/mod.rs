@@ -105,13 +105,12 @@ where
     }
 
     /// Instantiate a new PTA from specifications given in a file.
-    pub fn from_file(filename: &str) -> PTA<Q, T>
+    pub fn from_file(path: &Path) -> (PTA<Q, T>, String)
     where
         Q: FromStr,
         T: FromStr,
     {
-        let path = Path::new(filename);
-        let pta_string = match fs::read_to_string(filename) {
+        let pta_string = match fs::read_to_string(path) {
             Ok(file) => file,
             Err(e) => panic!(
                 "Could not read pta file {}: {}.",
@@ -119,7 +118,14 @@ where
                 e.description()
             ),
         };
-        pta_string.parse().unwrap()
+        if pta_string.starts_with("%") {
+            (
+                pta_string.parse().unwrap(),
+                pta_string.lines().next().unwrap().to_string(),
+            )
+        } else {
+            (pta_string.parse().unwrap(), "".to_string())
+        }
     }
 
     /// Recursively computes the cumulative probability for all runs on ξ with
