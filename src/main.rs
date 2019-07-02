@@ -32,7 +32,9 @@ fn main() {
         )
         .arg(
             Arg::with_name("INPUT")
-                .default_value("experiments/pta/default.pta")
+                .default_value(
+                    "experiments/pta/manually_constructed/default.pta",
+                )
                 .help("Set the input file to use")
                 .required(true)
                 .index(1),
@@ -76,7 +78,7 @@ fn main() {
         for level in 3..6 {
             for multiplicity in 2..4 {
                 for vocabulary_len in 2..7 {
-                    for average_rank in vec![1.0, 1.5, 2.0, 2.5, 3.0] {
+                    for average_rank in &[1.0, 1.5, 2.0, 2.5, 3.0] {
                         // TODO more than one pta per configuration
                         for _ in 0..1 {
                             let mut tries = 0;
@@ -84,7 +86,7 @@ fn main() {
                                 level,
                                 multiplicity,
                                 vocabulary_len,
-                                average_rank,
+                                *average_rank,
                                 &format!(
                                     "l{}_m{}_v{}_rk{:.1}",
                                     level,
@@ -114,7 +116,7 @@ fn main() {
         for entry in
             glob("experiments/pta/*.pta").expect("Failed to read glob pattern.")
         {
-            if let Err(_) = entry {
+            if entry.is_err() {
                 continue;
             }
             let path = &entry.unwrap();

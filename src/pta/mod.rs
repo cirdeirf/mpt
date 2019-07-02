@@ -118,7 +118,7 @@ where
                 e.description()
             ),
         };
-        if pta_string.starts_with("%") {
+        if pta_string.starts_with('%') {
             (
                 pta_string.parse().unwrap(),
                 pta_string.lines().next().unwrap().to_string(),
