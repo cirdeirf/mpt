@@ -1,0 +1,19 @@
+% 2 / 2 / 3 / 1.00 (level / multiplicity / vocabulary size / average rank)
+root: 00 # 1
+transition: 01 -> c(01) # 0.2580666732600578
+transition: 00 -> c(00) # 0.18738888921090607
+transition: 11 -> c(00) # 0.16496921966268413
+transition: 11 -> c(11) # 0.05530164288544763
+transition: 10 -> a(00) # 0.10096452593587558
+transition: 10 -> a(01) # 0.19231761248813287
+transition: 10 -> a(10) # 0.4063889145344194
+transition: 10 -> a(11) # 0.30032894704157226
+transition: 01 -> a(00) # 0.24010203479761547
+transition: 01 -> a(11) # 0.3827654654809096
+transition: 11 -> a(10) # 0.27980099766221334
+transition: 00 -> a(01) # 0.2222567537082468
+transition: 00 -> a(11) # 0.37405767951761126
+transition: 11 -> $() # 0.2573415203463048
+transition: 11 -> b(01) # 0.24258661944335008
+transition: 01 -> b(10) # 0.1190658264614172
+transition: 00 -> b(10) # 0.21629667756323598
