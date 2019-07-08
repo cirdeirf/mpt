@@ -83,9 +83,9 @@ if bp:
                                                100 * count_same_pr /
                                                count_non_aborted))
 
-label = "automata"
+label_scatter = "automata"
 if bp:
-    label_scatter = r"$\frac{\widehat{p} - p_{bp}}{\widehat{p}}$"
+    label_scatter = r"$\frac{\widehat{p} - \widetilde{p}}{\widehat{p}}$"
 ax.scatter(x_scatter, y_scatter, c="tab:blue", s=5, label=label_scatter)
 
 # average rank to insertions
@@ -113,14 +113,15 @@ elif pr:
     x = np.linspace(min(x_scatter), max(x_scatter), 100)
 
     y = 4*x
-    plt.plot(x, y, label=r"$\frac{1}{2p}$", c="tab:red")
+    plt.plot(x, y, label=r"$\frac{1}{2\widehat{p}}$", c="tab:red")
 
     y = pow(x, 2)
-    plt.plot(x, y, label=r"$\frac{1}{p^2}$", c="tab:red", linestyle="--")
+    plt.plot(x, y, label=r"$\frac{1}{\widehat{p}^2}$", c="tab:red",
+             linestyle="--")
 
     plt.xscale("log")
     plt.yscale("log")
-    plt.xlabel(r"$\frac{1}{p}$")
+    plt.xlabel(r"$\frac{1}{\widehat{p}}$")
     plt.ylabel("insertions")
 
 # mpt probability to relative error of best parse probability
