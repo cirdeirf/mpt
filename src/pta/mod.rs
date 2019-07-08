@@ -279,9 +279,13 @@ where
                         }
                         q.push(xi_s, pr_xi_s);
                         insertion_count += 1;
-                        if insertion_count > 1e+7 as usize {
+                        // if insertion_count % 1000 == 0 {
+                        //     eprintln!("{} \t {}", insertion_count, q.len());
+                        // }
+                        if insertion_count > 2e+7 as usize {
+                            // eprintln!("abort");
                             return Err(
-                                "Maximum number of insertions (10⁷) exceeded. \
+                                "Maximum number of insertions (20⁷) exceeded. \
                                  Calculation of most probable tree aborted.",
                             );
                         }

@@ -12,7 +12,7 @@ use std::path::Path;
 /// The pta is constructed as is described in Section X (TODO) of my master's
 /// thesis. Since the symbols are chosen randomly for each transition, it may
 /// happen that not enough symbols are included (to adhere to the desired amount
-/// of symbols) or that the desired average rank (+- 0.25) is not met. In these
+/// of symbols) or that the desired average rank (+- 0.2) is not met. In these
 /// cases, an error is returned.
 pub fn generate(
     // number of levels, each run includes at least one node from each level
@@ -40,25 +40,28 @@ pub fn generate(
         for l in 0..level {
             for m in 0..multiplicity {
                 for n in 0..multiplicity {
-                    // choose a random symbol
-                    let symbol = sigma_keys.choose(&mut rng).unwrap();
-                    // create a transition with 'km' as a source state and
-                    // rk(symbol) * 'ln' as target states
-                    let t: Transition<String, char> = Transition {
-                        source_state: k.to_string() + &m.to_string(),
-                        symbol: **symbol,
-                        target_states: vec![
-                            l.to_string() + &n.to_string();
-                            *sigma.get(symbol).unwrap()
-                        ],
-                        probability: LogDomain::new(rng.gen::<f64>()).unwrap(),
-                    };
-                    // move transition to mapping: states -> transtion
-                    // for easier normalisation (properness)
-                    transition_map
-                        .entry(t.source_state.clone())
-                        .or_insert_with(Vec::new)
-                        .push(t);
+                    // // choose a random symbol
+                    // let symbol = sigma_keys.choose(&mut rng).unwrap();
+                    for symbol in &sigma_keys {
+                        // create a transition with 'km' as a source state and
+                        // rk(symbol) * 'ln' as target states
+                        let t: Transition<String, char> = Transition {
+                            source_state: k.to_string() + &m.to_string(),
+                            symbol: **symbol,
+                            target_states: vec![
+                                l.to_string() + &n.to_string();
+                                *sigma.get(symbol).unwrap()
+                            ],
+                            probability: LogDomain::new(rng.gen::<f64>())
+                                .unwrap(),
+                        };
+                        // move transition to mapping: states -> transtion
+                        // for easier normalisation (properness)
+                        transition_map
+                            .entry(t.source_state.clone())
+                            .or_insert_with(Vec::new)
+                            .push(t);
+                    }
                 }
             }
             // transition to each states of level k to all states of level k+1
@@ -115,7 +118,8 @@ pub fn generate(
     // transitions do not add up to the desired average rank/number of children
     // (since the disired average rank is often unreachable, it suffices if it
     // is close enough)
-    else if (average_rk - average_rank).abs() > 0.25 {
+    else if (average_rk - average_rank).abs() >= 0.2 {
+        println!("{}", average_rank);
         Err("Average rank constraint not met.")
     }
     // create the new pta and write it to file
@@ -148,6 +152,17 @@ fn create_ranked_alphabet(
         sigma.insert(*c, average_rank.floor() as usize);
     }
     sigma.insert(*vocabulary.last().unwrap(), average_rank.ceil() as usize);
+
+    let average_rank_difference: f64 =
+        sigma.values().map(|x| *x as f64).sum::<f64>() / sigma.len() as f64
+            - average_rank;
+    if average_rank_difference <= -0.2 {
+        sigma
+            .insert(*vocabulary.first().unwrap(), average_rank.ceil() as usize);
+    } else if average_rank_difference >= 0.2 {
+        sigma
+            .insert(*vocabulary.last().unwrap(), average_rank.floor() as usize);
+    }
 
     sigma
 }

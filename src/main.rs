@@ -74,13 +74,13 @@ fn main() {
     // of symbols and average rank)
     if matches.is_present("generate") {
         // generate a tree with properties:
-        // #level, multiplicity, #symbols, average rank +- 0.25
-        for level in 3..6 {
+        // #level, multiplicity, #symbols, average rank +- 0.2
+        for level in 2..5 {
             for multiplicity in 2..4 {
-                for vocabulary_len in 2..7 {
-                    for average_rank in &[1.0, 1.5, 2.0, 2.5, 3.0] {
+                for vocabulary_len in 2..6 {
+                    for average_rank in &[1.0, 1.5, 2.0, 2.5] {
                         // TODO more than one pta per configuration
-                        for _ in 0..1 {
+                        for i in 0..10 {
                             let mut tries = 0;
                             while let Err(e) = experiments::generate(
                                 level,
@@ -88,11 +88,12 @@ fn main() {
                                 vocabulary_len,
                                 *average_rank,
                                 &format!(
-                                    "l{}_m{}_v{}_rk{:.1}",
+                                    "l{}_m{}_v{}_rk{:.1}__{}",
                                     level,
                                     multiplicity,
                                     vocabulary_len,
-                                    average_rank
+                                    average_rank,
+                                    i
                                 )
                                 .replace(".", ","),
                             ) {
@@ -100,7 +101,7 @@ fn main() {
                                     println!("{} Trying again.", e);
                                 }
                                 tries += 1;
-                                if tries > 2000 {
+                                if tries > 10000 {
                                     panic!(
                     "Maximum number of tries (2000) exceeded. Adjust desired \
                     PTA parameters or try again."
