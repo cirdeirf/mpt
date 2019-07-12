@@ -4,9 +4,10 @@ import matplotlib.ticker as ticker
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter1d
 
-rk = False  # insertions / average rank
+test_set = "0"
+rk = True  # insertions / average rank
 pr = False  # insertions / inverse probability
-bp = True  # best parse relative error
+bp = False  # best parse relative error
 if rk + pr + bp != 1:
     raise Exception("Only one plot at a time")
 
@@ -14,10 +15,10 @@ fig, ax = plt.subplots()
 plt.gcf().set_size_inches(11.95, 6.85)
 #  ax.grid(True)
 
-with open("test0_mpt.log") as f_mpt:
+with open("test" + test_set + "_mpt.log") as f_mpt:
     data_mpt = f_mpt.read()
 data_mpt = [entry.split("\n") for entry in data_mpt.split("\n\n")]
-with open("test0_best_parse.log") as f_bp:
+with open("test" + test_set + "_best_parse.log") as f_bp:
     data_bp = f_bp.read()
 data_bp = [entry.split("\n") for entry in data_bp.split("\n\n")]
 data = zip(data_mpt, data_bp)
@@ -90,7 +91,7 @@ ax.scatter(x_scatter, y_scatter, c="tab:blue", s=5, label=label_scatter)
 
 # average rank to insertions
 if rk:
-    filename = "plot_average_rank.pgf"
+    filename = "plot" + test_set + "_average_rank.pgf"
     x, y = zip(*sorted((xVal, np.mean([yVal for a, yVal in zip(x_scatter,
             y_scatter) if xVal==a])) for xVal in set(x_scatter)))
 
@@ -109,7 +110,7 @@ if rk:
 
 # inverse probability to insertions
 elif pr:
-    filename = "plot_inverse_probability.pgf"
+    filename = "plot" + test_set + "_inverse_probability.pgf"
     x = np.linspace(min(x_scatter), max(x_scatter), 100)
 
     y = 4*x
@@ -126,7 +127,7 @@ elif pr:
 
 # mpt probability to relative error of best parse probability
 elif bp:
-    filename = "plot_bp_relative_error.pgf"
+    filename = "plot" + test_set + "_bp_relative_error.pgf"
 
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos:
                                                       "$10^{%g}$" % x))
