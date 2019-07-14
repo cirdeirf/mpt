@@ -5,10 +5,12 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter1d
 
 test_set = "0"
-rk = True  # insertions / average rank
-pr = False  # insertions / inverse probability
-bp = False  # best parse relative error
-if rk + pr + bp != 1:
+rk   = True  # insertions / average rank
+pr   = False  # insertions / inverse probability
+bp   = False  # best parse relative error
+t_rk = False  # seconds / average rank
+t_pr = False  # seconds / inverse probability
+if rk + pr + bp + t_rk + t_pr != 1:
     raise Exception("Only one plot at a time")
 
 fig, ax = plt.subplots()
@@ -74,6 +76,12 @@ for (entry_mpt, entry_bp) in data:
             count_same_pr += 1
         x_scatter.append(np.log10(probability_mpt))
         y_scatter.append((probability_mpt - probability_bp) / probability_mpt)
+    elif t_rk:
+        x_scatter.append(average_rank)
+        y_scatter.append(np.log10(time))
+    elif t_pr and probability_mpt != 0.0:
+        x_scatter.append(1/probability_mpt)
+        y_scatter.append(np.log10(time))
 
 if bp:
     print("instances (< 20⁷): \t%d" % count_non_aborted)
@@ -134,6 +142,35 @@ elif bp:
     ax.yaxis.set_major_formatter(ticker.PercentFormatter(1.0))
     plt.xlabel("most probable tree probability")
     plt.ylabel("relative error")
+
+# average rank to time in seconds
+elif t_rk:
+    filename = "plot" + test_set + "_average_rank_time.pgf"
+
+    x, y = zip(*sorted((xVal, np.mean([yVal for a, yVal in zip(x_scatter,
+            y_scatter) if xVal==a])) for xVal in set(x_scatter)))
+
+    poly = np.polyfit(x, y, 1)
+    f = np.poly1d(poly)
+    xp = np.linspace(x[0], x[-1], 500)
+    yp = f(xp)
+    ysmoothed = gaussian_filter1d(y, sigma=5)
+    plt.plot(xp, yp, c="tab:red", label="linear approximation")
+
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, pos:
+                                                      "$10^{%g}$" % y))
+    plt.xlabel("average transition rank")
+    plt.ylabel("time in seconds")
+
+# inverse probability to time in seconds
+elif t_pr:
+    filename = "plot" + test_set + "_inverse_probability_time.pgf"
+
+    plt.xscale("log")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, pos:
+                                                      "$10^{%g}$" % y))
+    plt.xlabel(r"$\frac{1}{\widehat{p}}$")
+    plt.ylabel("time in seconds")
 
 ax.legend()
 
