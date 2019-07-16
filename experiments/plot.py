@@ -4,7 +4,7 @@ import matplotlib.ticker as ticker
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter1d
 
-test_set = "0"
+test_set = "1"
 rk   = True  # insertions / average rank
 pr   = False  # insertions / inverse probability
 bp   = False  # best parse relative error
@@ -30,10 +30,15 @@ y_scatter = []
 count_non_aborted = 0
 count_same_tree = 0
 count_same_pr = 0
+count_rk10 = 0
+count_rk15 = 0
+count_rk20 = 0
+count_rk25 = 0
 for (entry_mpt, entry_bp) in data:
     insertions = 2e+7
     probability_mpt = 0.0
     average_rank = 0.0
+    level = 0
     for line in entry_mpt:
         # mpt
         if line.startswith("mpt:"):
@@ -55,14 +60,24 @@ for (entry_mpt, entry_bp) in data:
                 time = float(time_str[:-1])
         # comments (extract average rank)
         elif line.startswith("%"):
+            level = float(re.sub(r"%|\(.*\)", "", line).split("/")[0])
             average_rank = float(re.sub(r"%|\(.*\)", "", line).split("/")[3])
     if rk:
         x_scatter.append(average_rank)
         y_scatter.append(np.log10(insertions))
+        if probability_mpt == 0.0:
+            if average_rank == 1.0:
+                count_rk10 += 1
+            elif average_rank < 2.0:
+                count_rk15 += 1
+            elif average_rank == 2.0:
+                count_rk20 += 1
+            else:
+                count_rk25 += 1
     elif pr and probability_mpt != 0.0:
         x_scatter.append(1/probability_mpt)
         y_scatter.append(insertions)
-    elif bp and probability_mpt != 0.0:
+    elif bp and probability_mpt != 0.0 and level == 2:
         count_non_aborted += 1
         for line in entry_bp:
             # best parse
@@ -116,13 +131,18 @@ if rk:
     plt.xlabel("average transition rank")
     plt.ylabel("insertions")
 
+    print("exceeded 20⁷ with average rank 1.0: %d" % (count_rk10))
+    print("exceeded 20⁷ with average rank 1.5: %d" % (count_rk15))
+    print("exceeded 20⁷ with average rank 2.0: %d" % (count_rk20))
+    print("exceeded 20⁷ with average rank 2.5: %d" % (count_rk25))
+
 # inverse probability to insertions
 elif pr:
     filename = "plot" + test_set + "_inverse_probability.pgf"
     x = np.linspace(min(x_scatter), max(x_scatter), 100)
 
     y = 4*x
-    plt.plot(x, y, label=r"$\frac{1}{2\widehat{p}}$", c="tab:red")
+    plt.plot(x, y, label=r"$\frac{4}{\widehat{p}}$", c="tab:red")
 
     y = pow(x, 2)
     plt.plot(x, y, label=r"$\frac{1}{\widehat{p}^2}$", c="tab:red",
@@ -160,7 +180,7 @@ elif t_rk:
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, pos:
                                                       "$10^{%g}$" % y))
     plt.xlabel("average transition rank")
-    plt.ylabel("time in seconds")
+    plt.ylabel("runtime in seconds")
 
 # inverse probability to time in seconds
 elif t_pr:
@@ -170,7 +190,7 @@ elif t_pr:
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, pos:
                                                       "$10^{%g}$" % y))
     plt.xlabel(r"$\frac{1}{\widehat{p}}$")
-    plt.ylabel("time in seconds")
+    plt.ylabel("runtime in seconds")
 
 ax.legend()
 
