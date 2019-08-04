@@ -1,0 +1,10 @@
+% no ambiguity
+root: qs # 0.9
+root: qg # 0.1
+transition: qs -> s(qg, qb) # 0.8
+transition: qs -> s(qa, qg) # 0.2
+transition: qg -> g(qg) # 0.5
+transition: qg -> g(qa) # 0.4
+transition: qg -> g(qb) # 0.1
+transition: qa -> a() # 1.0
+transition: qb -> b() # 1.0

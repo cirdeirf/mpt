@@ -33,7 +33,7 @@ fn main() {
         .arg(
             Arg::with_name("INPUT")
                 .default_value(
-                    "experiments/pta/manually_constructed/default.pta",
+                    "experiments/pta/manually_constructed/example.pta",
                 )
                 .help("Set the input file to use")
                 .required(true)
@@ -43,14 +43,19 @@ fn main() {
             Arg::with_name("verbose")
                 .short("v")
                 .long("verbose")
-                .help("Print the PTA (root weight vector and transitions)"),
+                .multiple(true)
+                .help("Set level of verbosity: \n\
+                v: print the pta (root weight mapping and transitions), \n\
+                vv: + output current best tree (only for mpt), \n\
+                vvv: + print variables after each iteration of the while loop \
+                (only mpt)."),
         )
         .arg(
             Arg::with_name("best_parse")
                 .short("b")
                 .long("best-parse")
                 .help(
-                    "Calculate the tree with the best parse (Figure 3, \
+                    "Calculate the tree with the best run (cf. Figure 3, \
                      Maletti and Satta, 2009)",
                 ),
         )
@@ -59,14 +64,17 @@ fn main() {
                 .short("g")
                 .long("generate")
                 .conflicts_with_all(&["experiments", "best_parse"])
-                .help("foo"),
+                .help("Generate a number of synthetic automata with the \
+                parameters (level, multiplicity, alphabet size) as used during \
+                testing for the thesis. They are saved in: experiments/pta/."),
         )
         .arg(
             Arg::with_name("experiments")
                 .short("e")
                 .long("experiments")
                 .conflicts_with_all(&["generate"])
-                .help("foo"),
+                .help("Calculate the most probable tree/best run for all pta \
+                in the test set: experiments/pta/test1/."),
         )
         .get_matches();
 
@@ -79,7 +87,6 @@ fn main() {
             for multiplicity in 2..4 {
                 for vocabulary_len in 2..6 {
                     for average_rank in &[1.0, 1.5, 2.0, 2.5] {
-                        // TODO more than one pta per configuration
                         for i in 0..10 {
                             let mut tries = 0;
                             while let Err(e) = experiments::generate(
@@ -114,8 +121,8 @@ fn main() {
             }
         }
     } else if matches.is_present("experiments") {
-        for entry in
-            glob("experiments/pta/*.pta").expect("Failed to read glob pattern.")
+        for entry in glob("experiments/pta/test1/*.pta")
+            .expect("Failed to read glob pattern.")
         {
             if entry.is_err() {
                 continue;
@@ -136,7 +143,8 @@ fn main() {
                 println!("best parse:\t {}", best_parse.0);
                 println!("probability:\t {}", best_parse.1);
             } else {
-                match pta.most_probable_tree() {
+                match pta.most_probable_tree(matches.occurrences_of("verbose"))
+                {
                     Ok(mpt) => {
                         println!("mpt:\t\t {}", mpt.0);
                         println!("probability:\t {}", mpt.1);
@@ -164,7 +172,7 @@ fn main() {
             println!("best parse:\t {}", best_parse.0);
             println!("probability:\t {}", best_parse.1);
         } else {
-            match pta.most_probable_tree() {
+            match pta.most_probable_tree(matches.occurrences_of("verbose")) {
                 Ok(mpt) => {
                     println!("mpt:\t\t {}", mpt.0);
                     println!("probability:\t {}", mpt.1);

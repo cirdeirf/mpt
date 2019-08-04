@@ -1,0 +1,9 @@
+root: q0 # 0.9
+root: q1 # 0.1
+transition: q1 -> α() # 0.1
+transition: q2 -> α() # 0.5
+transition: q2 -> β() # 0.5
+transition: q1 -> γ(q1) # 0.5
+transition: q1 -> γ(q2) # 0.3
+transition: q1 -> σ(q1, q2) # 0.1
+transition: q0 -> σ(q1, q2) # 1.0

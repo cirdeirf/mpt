@@ -1,7 +1,7 @@
 use crate::pta::{Transition, PTA};
 use log_domain::LogDomain;
 use num_traits::One;
-use rand::{seq::SliceRandom, thread_rng, Rng};
+use rand::{thread_rng, Rng};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs::File;
@@ -9,7 +9,7 @@ use std::io::Write;
 use std::path::Path;
 
 /// Generates and saves a pta for testing.
-/// The pta is constructed as is described in Section X (TODO) of my master's
+/// The pta is constructed as is described in Section 5.4.1 of my master's
 /// thesis. Since the symbols are chosen randomly for each transition, it may
 /// happen that not enough symbols are included (to adhere to the desired amount
 /// of symbols) or that the desired average rank (+- 0.2) is not met. In these

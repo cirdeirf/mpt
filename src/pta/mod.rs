@@ -49,7 +49,6 @@ where
 {
     /// Instantiates a new PTA from all non-null root weights and a list of
     /// transitions.
-    /// TODO consistency check
     fn new(
         root_weight_map: HashMap<Q, LogDomain<f64>>,
         transitions_vec: Vec<Transition<Q, T>>,
@@ -194,11 +193,12 @@ where
             .sum()
     }
 
-    /// Compute the potential probability PP(ξ) = min(|Q|²/height(ξ), Pr(ξ)).
-    /// This is supposed to take the bound of Theorem X (TODO) into account
-    /// similar to what is done in Definition 2 by de la Higuera and Oncina 2013
-    /// [Definition 2, dlHO13b]. Currently not in use since the bound is not
-    /// tight enough to affect the outcome.
+    /// Compute the potential probability PP(ξ) = min(|Q|²/height(ξ), Pr(ξ))
+    /// [Definition 7].
+    /// This is supposed to take the bound of Theorem 1 into account similar to
+    /// what is done in Definition 2 by de la Higuera and Oncina 2013
+    /// [Definition 2, dlHO13b]. Not in use since the bound is not tight enough
+    /// to affect the outcome.
     fn _potential_probability(
         &self,
         xi: &mut Tree<T>,
@@ -215,13 +215,14 @@ where
 
     /// Calculates the most probable tree.
     /// The algorithm, corresponding analysis and evaluation can be found in
-    /// Section X (TODO) of my master's thesis. This is based on an algorithm
-    /// for probabilistic finite state automaton provided by Algorithm 1 in
+    /// Chapter 5 of my master's thesis. This is based on an algorithm for
+    /// probabilistic finite state automaton provided by Algorithm 1 in
     /// ["Computing the Most Probable String with a Probabilistic Finite State
     /// Machine" by de la Higuera and Oncina,
     /// 2013](https://www.aclweb.org/anthology/W13-1801) [dlHO13b, Algorithm 1].
     pub fn most_probable_tree(
         &self,
+        verbosity: u64,
     ) -> Result<(Tree<T>, LogDomain<f64>, usize), &str> {
         // priority queue of explored trees ξ ∈ T_Σ(X), sorted w.r.t. Pr(ξ)
         let mut q = PriorityQueue::new();
@@ -247,6 +248,25 @@ where
         // initialise with an arbitrary value (save the overhead of looking for
         // the current best complete tree consiting of one symbol)
         current_best = q.peek().unwrap().0.clone();
+
+        // print current state: content of q, current_best and xi
+        let mut iteration = 0;
+        if verbosity >= 3 {
+            println!("--- iteration {} ---", iteration);
+            let q_sorted = q.clone();
+            println!("priority queue Q:");
+            for e in q_sorted.into_sorted_iter() {
+                println!("{:>25} \t {}", e.0.to_string(), e.1);
+            }
+            println!(
+                "current best complete tree (\\hat{{ξ}}):\n {:>25} \t {} \t\
+                 (placeholder value)",
+                current_best.to_string(),
+                current_prop
+            );
+            println!("priority queue's best tree (ξ):\n \t - \t -");
+            println!("-------------------\n");
+        }
 
         while !q.is_empty() {
             let (xi, pr) = q.pop().unwrap();
@@ -276,14 +296,21 @@ where
                         if !xi_s.is_prefix {
                             current_best = xi_s.clone();
                             current_prop = pr_xi_s;
+                            if verbosity >= 2 {
+                                println!(
+                                    "new current best complete tree: \n\
+                                     {:>25} \t {:25} \n\
+                                     ({} insertions)\n",
+                                    current_best.to_string(),
+                                    current_prop,
+                                    insertion_count
+                                );
+                            }
                         }
                         q.push(xi_s, pr_xi_s);
                         insertion_count += 1;
-                        // if insertion_count % 1000 == 0 {
-                        //     eprintln!("{} \t {}", insertion_count, q.len());
-                        // }
+
                         if insertion_count > 2e+7 as usize {
-                            // eprintln!("abort");
                             return Err(
                                 "Maximum number of insertions (20⁷) exceeded. \
                                  Calculation of most probable tree aborted.",
@@ -291,6 +318,28 @@ where
                         }
                     }
                 }
+            }
+
+            // print current state: content of q, current_best and xi
+            if verbosity >= 3 {
+                iteration = iteration + 1;
+                println!("--- iteration {} ---", iteration);
+                let q_sorted = q.clone();
+                println!("priority queue Q:");
+                for e in q_sorted.into_sorted_iter() {
+                    println!("{:>25} \t {}", e.0.to_string(), e.1);
+                }
+                println!(
+                    "current best complete tree (\\hat{{ξ}}):\n {:>25} \t {}",
+                    current_best.to_string(),
+                    current_prop
+                );
+                println!(
+                    "priority queue's best tree (ξ):\n {:>25} \t {}",
+                    xi.to_string(),
+                    pr
+                );
+                println!("-------------------\n");
             }
         }
         Ok((current_best, current_prop, insertion_count))
@@ -386,18 +435,17 @@ where
                     }
                 }
                 best_probabilities[*q] = best_probabilities_max;
-                // add only the state to the set of explored states with the
-                // best probability among all unexplored states
-                explored_states.insert(
-                    *reachable_states
-                        .iter()
-                        .max_by(|&q_1, &q_2| {
-                            best_probabilities[*q_1]
-                                .cmp(&best_probabilities[*q_2])
-                        })
-                        .unwrap(),
-                );
             }
+            // add only the state to the set of explored states with the
+            // best probability among all unexplored states
+            explored_states.insert(
+                *reachable_states
+                    .iter()
+                    .max_by(|&q_1, &q_2| {
+                        best_probabilities[*q_1].cmp(&best_probabilities[*q_2])
+                    })
+                    .unwrap(),
+            );
         }
 
         // apply root weights
@@ -514,7 +562,6 @@ mod tests {
         );
     }
 
-    // TODO find example where height bound matters
     #[test]
     fn test_potential_probability() {
         let pta_string = "root: 0 # 0.7\n\
